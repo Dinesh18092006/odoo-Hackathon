@@ -1,0 +1,34 @@
+# AssetFlow Backend Dependencies
+# Tested with Python 3.14 on Windows
+# All packages have pre-built wheels for Python 3.14
+
+# Web Framework
+fastapi>=0.115.5
+uvicorn[standard]>=0.32.1
+
+# Database (async SQLite — no PostgreSQL needed)
+sqlalchemy[asyncio]>=2.0.36
+aiosqlite>=0.20.0
+alembic>=1.14.0
+
+# Data Validation (Pydantic v2 — has Python 3.14 wheel)
+pydantic>=2.13.4
+pydantic-settings>=2.7.0
+
+# Authentication
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.2.1
+
+# File uploads
+python-multipart>=0.0.20
+
+# Image/QR code (Python 3.14 wheels available)
+pillow>=12.3.0
+qrcode>=8.0
+
+# PDF reports (pure Python — no C dependencies)
+reportlab>=4.2.5
+
+# Utilities
+python-dotenv>=1.0.1
+httpx>=0.28.1
