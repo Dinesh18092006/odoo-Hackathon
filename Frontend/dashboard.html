@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — AssetFlow</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<div id="toast-container"></div>
+<div class="app-shell">
+  <div id="sidebar-mount"></div>
+
+  <div class="main-content">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="hamburger" id="hamburger">☰</button>
+        <span class="topbar-title">📊 Dashboard</span>
+      </div>
+      <div class="topbar-actions">
+        <span id="greeting" class="text-muted text-sm"></span>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <!-- KPI Cards -->
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card" style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;min-height:80px;">
+          <div class="spinner"></div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:28px;">
+        <a href="assets.html" class="btn btn-primary" data-role="Admin,AssetManager">➕ Register Asset</a>
+        <a href="bookings.html" class="btn btn-secondary">📅 Book Resource</a>
+        <a href="maintenance.html" class="btn btn-secondary">🔧 Request Maintenance</a>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <!-- Overdue Returns -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">⏰ Overdue Returns</div>
+          </div>
+          <div id="overdue-list">
+            <div style="display:flex;justify-content:center;padding:20px;"><div class="spinner"></div></div>
+          </div>
+        </div>
+
+        <!-- Asset Status Breakdown -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">📦 Asset Status Overview</div>
+          </div>
+          <div id="status-chart"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/core.js"></script>
+<script src="../js/sidebar.js"></script>
+<script>
+if (!requireAuth()) throw new Error('Not auth');
+injectSidebar();
+initSidebar();
+
+const user = Auth.getUser();
+const hr = new Date().getHours();
+const greet = hr<12?'Good morning':hr<17?'Good afternoon':'Good evening';
+document.getElementById('greeting').textContent = `${hr<12?'Good morning':hr<17?'Good afternoon':'Good evening'}, ${user.name.split(' ')[0]} 👋`;
+
+async function loadDashboard() {
+  const data = await apiFetch('/api/dashboard/kpis');
+
+  // KPI grid
+  const kpiGrid = document.getElementById('kpi-grid');
+  const assetTotal = Object.values(data.assets).reduce((a,b)=>a+b,0);
+  kpiGrid.innerHTML = `
+    <div class="kpi-card green">
+      <div class="kpi-label">Available</div>
+      <div class="kpi-value">${data.assets.available}</div>
+      <div class="kpi-sub">Ready to allocate</div>
+    </div>
+    <div class="kpi-card blue">
+      <div class="kpi-label">Allocated</div>
+      <div class="kpi-value">${data.assets.allocated}</div>
+      <div class="kpi-sub">In active use</div>
+    </div>
+    <div class="kpi-card orange">
+      <div class="kpi-label">Maintenance</div>
+      <div class="kpi-value">${data.maintenance_active}</div>
+      <div class="kpi-sub">Active requests</div>
+    </div>
+    <div class="kpi-card purple">
+      <div class="kpi-label">Bookings</div>
+      <div class="kpi-value">${data.active_bookings}</div>
+      <div class="kpi-sub">Upcoming / ongoing</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Pending Transfers</div>
+      <div class="kpi-value">${data.pending_transfers}</div>
+      <div class="kpi-sub">Awaiting approval</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Overdue Returns</div>
+      <div class="kpi-value">${data.overdue_returns}</div>
+      <div class="kpi-sub">Past expected date</div>
+    </div>
+    <div class="kpi-card navy" style="border-top-color:var(--navy);">
+      <div class="kpi-label">Total Assets</div>
+      <div class="kpi-value">${assetTotal}</div>
+      <div class="kpi-sub">Across all statuses</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Upcoming Returns</div>
+      <div class="kpi-value">${data.upcoming_returns}</div>
+      <div class="kpi-sub">Within 7 days</div>
+    </div>
+  `;
+
+  // Overdue list
+  const ol = document.getElementById('overdue-list');
+  if (!data.overdue_list?.length) {
+    ol.innerHTML = '<div class="empty-state" style="padding:30px 0;"><div class="empty-icon">✅</div><p>No overdue returns</p></div>';
+  } else {
+    ol.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Asset</th><th>Holder</th><th>Expected</th></tr></thead>
+      <tbody>${data.overdue_list.map(r=>`
+        <tr class="overdue-row">
+          <td><strong>${r.asset_tag}</strong><br><span class="text-muted text-sm">${r.asset_name}</span></td>
+          <td>${r.holder_name||'—'}</td>
+          <td><span class="badge badge-red">${fmtDate(r.expected_return_date)}</span></td>
+        </tr>`).join('')}
+      </tbody></table></div>`;
+  }
+
+  // Status bar chart
+  const statuses = [
+    {label:'Available',val:data.assets.available,color:'#27AE60'},
+    {label:'Allocated',val:data.assets.allocated,color:'#2E86C1'},
+    {label:'Reserved',val:data.assets.reserved,color:'#8E44AD'},
+    {label:'Maintenance',val:data.assets.under_maintenance,color:'#F39C12'},
+    {label:'Lost',val:data.assets.lost,color:'#E74C3C'},
+    {label:'Retired',val:data.assets.retired,color:'#95A5A6'},
+    {label:'Disposed',val:data.assets.disposed,color:'#7F8C8D'},
+  ].filter(s=>s.val>0);
+
+  const max = Math.max(...statuses.map(s=>s.val),1);
+  document.getElementById('status-chart').innerHTML = statuses.map(s=>`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+      <span style="font-size:12px;width:90px;color:var(--text-muted);">${s.label}</span>
+      <div style="flex:1;background:var(--surface);border-radius:4px;height:18px;overflow:hidden;">
+        <div style="width:${Math.round(s.val/max*100)}%;height:100%;background:${s.color};border-radius:4px;transition:width .4s;"></div>
+      </div>
+      <span style="font-weight:700;font-size:13px;width:24px;text-align:right;">${s.val}</span>
+    </div>
+  `).join('') || '<p class="text-muted" style="padding:20px 0;">No asset data yet.</p>';
+}
+
+loadDashboard().catch(e=>toast(e.message,'error'));
+</script>
+</body>
+</html>
