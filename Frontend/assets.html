@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assets — AssetFlow</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<div id="toast-container"></div>
+<div class="app-shell">
+  <div id="sidebar-mount"></div>
+  <div class="main-content">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="hamburger" id="hamburger">☰</button>
+        <span class="topbar-title">🏷️ Asset Directory</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary btn-sm" id="btn-open-register" data-role="Admin,AssetManager">➕ Register Asset</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <!-- Filters -->
+      <div class="filter-row">
+        <div class="search-bar">
+          <span>🔍</span>
+          <input type="text" id="search-input" placeholder="Search by tag, name, serial…">
+        </div>
+        <select class="form-select" style="width:160px;" id="filter-category">
+          <option value="">All Categories</option>
+        </select>
+        <select class="form-select" style="width:150px;" id="filter-status">
+          <option value="">All Statuses</option>
+          <option>Available</option><option>Allocated</option><option>Reserved</option>
+          <option>UnderMaintenance</option><option>Lost</option><option>Retired</option><option>Disposed</option>
+        </select>
+        <select class="form-select" style="width:140px;" id="filter-bookable">
+          <option value="">All Types</option>
+          <option value="true">Bookable Only</option>
+          <option value="false">Non-Bookable</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="loadAssets()">Apply</button>
+      </div>
+
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div id="asset-table-wrap">
+          <div style="display:flex;justify-content:center;padding:48px;"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Register / Edit Asset Modal -->
+<div class="modal-overlay" id="modal-asset">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-asset-title">Register New Asset</div>
+      <button class="modal-close" onclick="closeModal('modal-asset')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="asset-id">
+      <div class="form-grid">
+        <div class="form-group form-full">
+          <label class="form-label">Asset Name *</label>
+          <input type="text" id="asset-name" class="form-control" placeholder="e.g. Dell Latitude 5540" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category *</label>
+          <select id="asset-category" class="form-select" required></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Serial Number</label>
+          <input type="text" id="asset-serial" class="form-control" placeholder="SN-XXXXXXXX">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Acquisition Date</label>
+          <input type="date" id="asset-acq-date" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Acquisition Cost (₹)</label>
+          <input type="number" id="asset-cost" class="form-control" min="0" step="0.01">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Condition</label>
+          <select id="asset-condition" class="form-select">
+            <option>New</option><option>Good</option><option>Fair</option><option>Poor</option>
+          </select>
+        </div>
+        <div class="form-group form-full">
+          <label class="form-label">Location</label>
+          <input type="text" id="asset-location" class="form-control" placeholder="Floor 2, Room 204">
+        </div>
+        <div class="form-group form-full">
+          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="asset-bookable" style="width:16px;height:16px;">
+            Mark as Shared / Bookable Resource
+          </label>
+          <span class="text-sm text-muted">Enable this if employees can book this asset by time slot (e.g. meeting rooms, vehicles)</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-asset')">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-asset">Save Asset</button>
+    </div>
+  </div>
+</div>
+
+<!-- Asset Detail Modal -->
+<div class="modal-overlay" id="modal-asset-detail">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-header">
+      <div class="modal-title" id="detail-title">Asset Detail</div>
+      <button class="modal-close" onclick="closeModal('modal-asset-detail')">×</button>
+    </div>
+    <div class="modal-body" id="detail-body" style="gap:20px;"></div>
+  </div>
+</div>
+
+<script src="../js/core.js"></script>
+<script src="../js/sidebar.js"></script>
+<script>
+if (!requireAuth()) throw new Error();
+injectSidebar(); initSidebar();
+
+let allAssets = [];
+
+async function loadAssets() {
+  const search   = document.getElementById('search-input').value;
+  const catId    = document.getElementById('filter-category').value;
+  const status   = document.getElementById('filter-status').value;
+  const bookable = document.getElementById('filter-bookable').value;
+
+  let url = '/api/assets/?';
+  if (search)   url += `search=${encodeURIComponent(search)}&`;
+  if (catId)    url += `category_id=${catId}&`;
+  if (status)   url += `status=${status}&`;
+  if (bookable) url += `is_bookable=${bookable}&`;
+
+  const wrap = document.getElementById('asset-table-wrap');
+  wrap.innerHTML = '<div style="display:flex;justify-content:center;padding:48px;"><div class="spinner"></div></div>';
+
+  try {
+    allAssets = await apiFetch(url);
+    renderTable(allAssets);
+  } catch(e) { toast(e.message,'error'); }
+}
+
+function renderTable(assets) {
+  const wrap = document.getElementById('asset-table-wrap');
+  if (!assets.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>No assets found. Register one to get started.</p></div>';
+    return;
+  }
+  wrap.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th>Asset Tag</th><th>Name</th><th>Category</th>
+      <th>Status</th><th>Condition</th><th>Location</th>
+      <th>Current Holder</th><th>Type</th><th></th>
+    </tr></thead>
+    <tbody>
+      ${assets.map(a=>`
+        <tr>
+          <td><strong style="color:var(--teal);font-family:'Sora',sans-serif;">${a.asset_tag}</strong></td>
+          <td>${a.name}</td>
+          <td>${a.category_name||'—'}</td>
+          <td>${statusBadge(a.status)}</td>
+          <td>${a.condition}</td>
+          <td>${a.location||'—'}</td>
+          <td>${a.current_holder_name || a.current_dept_name || '<span class="text-muted">—</span>'}</td>
+          <td>${a.is_bookable ? '<span class="badge badge-teal">📅 Bookable</span>' : '<span class="badge badge-gray">🔒 Fixed</span>'}</td>
+          <td style="white-space:nowrap;">
+            <button class="btn btn-ghost btn-xs" onclick="viewDetail(${a.id})">👁 View</button>
+            <button class="btn btn-ghost btn-xs" data-role="Admin,AssetManager" onclick="openEdit(${a.id})">✏️</button>
+          </td>
+        </tr>
+      `).join('')}
+    </tbody></table></div>`;
+
+  // Re-apply role visibility
+  const user = Auth.getUser();
+  wrap.querySelectorAll('[data-role]').forEach(el=>{
+    const roles = el.dataset.role.split(',');
+    if (!roles.includes(user.role)) el.style.display='none';
+  });
+}
+
+// Populate category dropdown
+async function populateCategoryFilter() {
+  const cats = await apiFetch('/api/org/categories');
+  const sel = document.getElementById('filter-category');
+  cats.forEach(c=>{
+    sel.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+  });
+
+  const sel2 = document.getElementById('asset-category');
+  sel2.innerHTML = '<option value="">— Select Category —</option>';
+  cats.forEach(c=>{
+    sel2.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+  });
+}
+
+// Register asset
+document.getElementById('btn-open-register')?.addEventListener('click', ()=>{
+  document.getElementById('asset-id').value = '';
+  document.getElementById('modal-asset-title').textContent = 'Register New Asset';
+  document.getElementById('btn-save-asset').textContent = 'Register Asset';
+  // clear form
+  ['asset-name','asset-serial','asset-acq-date','asset-cost','asset-location'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('asset-condition').value = 'New';
+  document.getElementById('asset-bookable').checked = false;
+  openModal('modal-asset');
+});
+
+function openEdit(id) {
+  const a = allAssets.find(x=>x.id===id);
+  if (!a) return;
+  document.getElementById('asset-id').value = a.id;
+  document.getElementById('modal-asset-title').textContent = `Edit — ${a.asset_tag}`;
+  document.getElementById('btn-save-asset').textContent = 'Update Asset';
+  document.getElementById('asset-name').value = a.name;
+  document.getElementById('asset-category').value = a.category_id;
+  document.getElementById('asset-serial').value = a.serial_number||'';
+  document.getElementById('asset-acq-date').value = a.acquisition_date?.split('T')[0]||'';
+  document.getElementById('asset-cost').value = a.acquisition_cost||'';
+  document.getElementById('asset-condition').value = a.condition;
+  document.getElementById('asset-location').value = a.location||'';
+  document.getElementById('asset-bookable').checked = !!a.is_bookable;
+  openModal('modal-asset');
+}
+
+document.getElementById('btn-save-asset').addEventListener('click', async ()=>{
+  const id = document.getElementById('asset-id').value;
+  const body = {
+    name:             document.getElementById('asset-name').value.trim(),
+    category_id:      parseInt(document.getElementById('asset-category').value),
+    serial_number:    document.getElementById('asset-serial').value.trim()||null,
+    acquisition_date: document.getElementById('asset-acq-date').value||null,
+    acquisition_cost: parseFloat(document.getElementById('asset-cost').value)||null,
+    condition:        document.getElementById('asset-condition').value,
+    location:         document.getElementById('asset-location').value.trim()||null,
+    is_bookable:      document.getElementById('asset-bookable').checked,
+  };
+  if (!body.name || !body.category_id) { toast('Name and Category are required','error'); return; }
+
+  try {
+    if (id) {
+      await apiFetch(`/api/assets/${id}`, {method:'PUT', body:JSON.stringify(body)});
+      toast('Asset updated');
+    } else {
+      const res = await apiFetch('/api/assets/', {method:'POST', body:JSON.stringify(body)});
+      toast(`Asset registered: ${res.asset_tag}`);
+    }
+    closeModal('modal-asset');
+    loadAssets();
+  } catch(e) { toast(e.message,'error'); }
+});
+
+// View detail
+async function viewDetail(id) {
+  try {
+    const a = await apiFetch(`/api/assets/${id}`);
+    const title = document.getElementById('detail-title');
+    title.innerHTML = `${a.asset_tag} — ${a.name}`;
+
+    const body = document.getElementById('detail-body');
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div><div class="text-muted text-sm">Status</div><div style="margin-top:4px;">${statusBadge(a.status)}</div></div>
+        <div><div class="text-muted text-sm">Category</div><div style="font-weight:600;margin-top:4px;">${a.category_name||'—'}</div></div>
+        <div><div class="text-muted text-sm">Serial Number</div><div style="margin-top:4px;">${a.serial_number||'—'}</div></div>
+        <div><div class="text-muted text-sm">Condition</div><div style="margin-top:4px;">${a.condition}</div></div>
+        <div><div class="text-muted text-sm">Location</div><div style="margin-top:4px;">${a.location||'—'}</div></div>
+        <div><div class="text-muted text-sm">Bookable</div><div style="margin-top:4px;">${a.is_bookable?'✅ Yes':'❌ No'}</div></div>
+        <div><div class="text-muted text-sm">Acquisition Date</div><div style="margin-top:4px;">${fmtDate(a.acquisition_date)}</div></div>
+        <div><div class="text-muted text-sm">Acquisition Cost</div><div style="margin-top:4px;">${a.acquisition_cost ? '₹'+Number(a.acquisition_cost).toLocaleString() : '—'}</div></div>
+      </div>
+
+      <div style="margin-top:8px;">
+        <div style="font-family:'Sora',sans-serif;font-weight:700;margin-bottom:10px;">📋 Allocation History</div>
+        ${a.allocation_history?.length ? `
+        <div class="table-wrap"><table>
+          <thead><tr><th>Allocated To</th><th>Dept</th><th>By</th><th>From</th><th>To</th><th>Status</th></tr></thead>
+          <tbody>${a.allocation_history.map(al=>`
+            <tr>
+              <td>${al.employee_name||'—'}</td>
+              <td>${al.dept_name||'—'}</td>
+              <td>${al.allocated_by_name||'—'}</td>
+              <td>${fmtDate(al.allocated_at)}</td>
+              <td>${al.returned_at?fmtDate(al.returned_at):'<span class="badge badge-blue">Active</span>'}</td>
+              <td>${statusBadge(al.status)}</td>
+            </tr>`).join('')}
+          </tbody></table></div>` : '<p class="text-muted text-sm">No allocation history.</p>'}
+      </div>
+
+      <div>
+        <div style="font-family:'Sora',sans-serif;font-weight:700;margin-bottom:10px;">🔧 Maintenance History</div>
+        ${a.maintenance_history?.length ? `
+        <div class="table-wrap"><table>
+          <thead><tr><th>Description</th><th>Priority</th><th>Status</th><th>Raised By</th><th>Date</th></tr></thead>
+          <tbody>${a.maintenance_history.map(m=>`
+            <tr>
+              <td>${m.description}</td>
+              <td>${statusBadge(m.priority)}</td>
+              <td>${statusBadge(m.status)}</td>
+              <td>${m.raised_by_name||'—'}</td>
+              <td>${fmtDate(m.created_at)}</td>
+            </tr>`).join('')}
+          </tbody></table></div>` : '<p class="text-muted text-sm">No maintenance history.</p>'}
+      </div>
+    `;
+    openModal('modal-asset-detail');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// Live search
+document.getElementById('search-input').addEventListener('input', ()=>{
+  clearTimeout(window._searchTimer);
+  window._searchTimer = setTimeout(loadAssets, 350);
+});
+
+// Init
+populateCategoryFilter();
+loadAssets();
+</script>
+</body>
+</html>
