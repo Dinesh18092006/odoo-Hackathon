@@ -143,7 +143,7 @@
 <script src="js/core.js"></script>
 <script>
   // Redirect if already logged in
-  if (Auth.isLoggedIn()) window.location.href = 'pages/dashboard.html';
+  if (Auth.isLoggedIn()) window.location.href = 'dashboard.html';
 
   function showSection(s) {
     ['login','signup','forgot'].forEach(x => {
@@ -173,7 +173,7 @@
         })
       });
       Auth.setSession(data.access_token, data.user);
-      window.location.href = 'pages/dashboard.html';
+      window.location.href = 'dashboard.html';
     } catch (err) {
       errEl.innerHTML = `<div class="alert alert-error">⚠ ${err.message}</div>`;
       errEl.style.display = 'block';
