@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AssetFlow — Login</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .feature-list { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+  .feature-list li { display: flex; align-items: flex-start; gap: 12px; color: rgba(255,255,255,0.75); font-size: 14px; }
+  .feature-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+  .divider { display: flex; align-items: center; gap: 12px; color: var(--text-muted); font-size: 12px; margin: 6px 0; }
+  .divider::before, .divider::after { content:''; flex:1; height:1px; background:var(--border); }
+  .pass-wrap { position: relative; }
+  .pass-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 16px; }
+  .panel-title { font-family:'Sora',sans-serif; font-size:2.5rem; font-weight:800; color:#fff; line-height:1.15; margin-bottom:12px; }
+</style>
+</head>
+<body>
+<div id="toast-container"></div>
+
+<div class="auth-page">
+  <!-- Hero Panel -->
+  <div class="auth-hero">
+    <div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:32px;">
+        <div class="logo-icon" style="width:48px;height:48px;border-radius:12px;font-size:24px;">📦</div>
+        <span style="font-family:'Sora',sans-serif;font-weight:800;font-size:1.5rem;color:#fff;">Asset<span style="color:var(--teal)">Flow</span></span>
+      </div>
+      <div class="panel-title">Track every asset.<br>From register<br>to <span style="color:var(--teal)">retirement.</span></div>
+      <p style="color:rgba(255,255,255,0.55);font-size:15px;max-width:360px;margin-bottom:36px;">
+        A centralized ERP platform for organizations to manage physical assets, bookings, maintenance, and audits — without spreadsheets.
+      </p>
+      <ul class="feature-list">
+        <li><span class="feature-icon">🏷️</span> Auto-tagged assets with unique AF-XXXX IDs and full history</li>
+        <li><span class="feature-icon">📅</span> Time-slot booking with overlap protection</li>
+        <li><span class="feature-icon">🔧</span> Maintenance approval workflow</li>
+        <li><span class="feature-icon">🔍</span> Structured audit cycles with discrepancy reports</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Auth Panel -->
+  <div class="auth-panel">
+    <div class="auth-logo">
+      <div class="logo-mark" style="gap:8px;">
+        <div class="logo-icon">📦</div>
+        <span class="logo-text">Asset<span>Flow</span></span>
+      </div>
+    </div>
+
+    <!-- Login Form -->
+    <div id="login-section">
+      <div class="auth-heading">Welcome back</div>
+      <div class="auth-sub">Sign in to your AssetFlow account</div>
+
+      <form class="auth-form" id="login-form">
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" id="login-email" class="form-control" placeholder="you@company.com" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <div class="pass-wrap">
+            <input type="password" id="login-password" class="form-control" placeholder="••••••••" required>
+            <button type="button" class="pass-toggle" onclick="togglePass('login-password',this)">👁</button>
+          </div>
+        </div>
+        <div style="text-align:right;margin-top:-6px;">
+          <a href="#" class="auth-link text-sm" onclick="showSection('forgot')">Forgot password?</a>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;">
+          Sign In
+        </button>
+      </form>
+
+      <div class="divider" style="margin-top:20px;">or</div>
+      <div class="auth-switch">
+        Don't have an account? <a href="#" class="auth-link" onclick="showSection('signup')">Create one</a>
+      </div>
+
+      <div id="login-error" style="display:none;margin-top:14px;"></div>
+    </div>
+
+    <!-- Signup Form -->
+    <div id="signup-section" style="display:none;">
+      <div class="auth-heading">Create account</div>
+      <div class="auth-sub">You'll be added as an Employee. An Admin can promote your role.</div>
+
+      <form class="auth-form" id="signup-form">
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input type="text" id="signup-name" class="form-control" placeholder="Priya Sharma" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" id="signup-email" class="form-control" placeholder="you@company.com" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <div class="pass-wrap">
+            <input type="password" id="signup-password" class="form-control" placeholder="Min 8 characters" required minlength="8">
+            <button type="button" class="pass-toggle" onclick="togglePass('signup-password',this)">👁</button>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;">
+          Create Account
+        </button>
+      </form>
+      <div class="auth-switch" style="margin-top:16px;">
+        Already have an account? <a href="#" class="auth-link" onclick="showSection('login')">Sign in</a>
+      </div>
+      <div id="signup-error" style="display:none;margin-top:14px;"></div>
+    </div>
+
+    <!-- Forgot Password -->
+    <div id="forgot-section" style="display:none;">
+      <div class="auth-heading">Reset Password</div>
+      <div class="auth-sub">Enter your email to receive a reset token.</div>
+      <form class="auth-form" id="forgot-form">
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" id="forgot-email" class="form-control" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;">
+          Send Reset Link
+        </button>
+      </form>
+      <div id="forgot-result" style="margin-top:14px;"></div>
+      <div class="auth-switch" style="margin-top:16px;">
+        <a href="#" class="auth-link" onclick="showSection('login')">← Back to Sign In</a>
+      </div>
+    </div>
+
+    <div style="margin-top:32px;padding-top:20px;border-top:1px solid var(--border);">
+      <p class="text-sm text-muted" style="text-align:center;">
+        Default admin: <strong>admin@assetflow.local</strong> / <strong>Admin@123</strong>
+      </p>
+    </div>
+  </div>
+</div>
+
+<script src="js/core.js"></script>
+<script>
+  // Redirect if already logged in
+  if (Auth.isLoggedIn()) window.location.href = 'pages/dashboard.html';
+
+  function showSection(s) {
+    ['login','signup','forgot'].forEach(x => {
+      document.getElementById(x+'-section').style.display = x===s ? 'block' : 'none';
+    });
+  }
+
+  function togglePass(id, btn) {
+    const el = document.getElementById(id);
+    el.type = el.type === 'password' ? 'text' : 'password';
+    btn.textContent = el.type === 'password' ? '👁' : '🙈';
+  }
+
+  // Login
+  document.getElementById('login-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Signing in…';
+    const errEl = document.getElementById('login-error');
+    errEl.style.display = 'none';
+    try {
+      const data = await apiFetch('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: document.getElementById('login-email').value,
+          password: document.getElementById('login-password').value,
+        })
+      });
+      Auth.setSession(data.access_token, data.user);
+      window.location.href = 'pages/dashboard.html';
+    } catch (err) {
+      errEl.innerHTML = `<div class="alert alert-error">⚠ ${err.message}</div>`;
+      errEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Sign In';
+    }
+  });
+
+  // Signup
+  document.getElementById('signup-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Creating…';
+    const errEl = document.getElementById('signup-error');
+    errEl.style.display = 'none';
+    try {
+      await apiFetch('/api/auth/signup', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: document.getElementById('signup-name').value,
+          email: document.getElementById('signup-email').value,
+          password: document.getElementById('signup-password').value,
+        })
+      });
+      toast('Account created! Please sign in.');
+      showSection('login');
+    } catch (err) {
+      errEl.innerHTML = `<div class="alert alert-error">⚠ ${err.message}</div>`;
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Create Account';
+    }
+  });
+
+  // Forgot
+  document.getElementById('forgot-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true;
+    try {
+      const data = await apiFetch('/api/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email: document.getElementById('forgot-email').value })
+      });
+      document.getElementById('forgot-result').innerHTML =
+        `<div class="alert alert-success">✓ ${data.message}${data.reset_token ? ' Token: <strong>'+data.reset_token+'</strong>' : ''}</div>`;
+    } catch (err) {
+      document.getElementById('forgot-result').innerHTML = `<div class="alert alert-error">⚠ ${err.message}</div>`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
