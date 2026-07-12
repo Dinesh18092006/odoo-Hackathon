@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asset Details — AssetFlow</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+</head>
+<body>
+  <div class="app-layout">
+    <main class="main-content" id="main-content">
+      <div class="page-container">
+        
+        <div class="page-header">
+          <div class="page-title">
+            <h1 id="asset-name">Loading Asset...</h1>
+            <p id="asset-tag" class="text-muted"></p>
+          </div>
+          <div class="page-actions" id="asset-actions" style="display:none;">
+            <!-- Actions populated via JS based on role and status -->
+          </div>
+        </div>
+
+        <div class="grid-2 mb-6">
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Details</h2>
+            </div>
+            <div class="card-body">
+              <div class="detail-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                  <div class="text-xs text-muted">Status</div>
+                  <div id="asset-status" class="font-medium"></div>
+                </div>
+                <div>
+                  <div class="text-xs text-muted">Category</div>
+                  <div id="asset-category" class="font-medium"></div>
+                </div>
+                <div>
+                  <div class="text-xs text-muted">Department</div>
+                  <div id="asset-department" class="font-medium"></div>
+                </div>
+                <div>
+                  <div class="text-xs text-muted">Serial Number</div>
+                  <div id="asset-sn" class="font-medium"></div>
+                </div>
+                <div>
+                  <div class="text-xs text-muted">Vendor</div>
+                  <div id="asset-vendor" class="font-medium"></div>
+                </div>
+                <div>
+                  <div class="text-xs text-muted">Location</div>
+                  <div id="asset-location" class="font-medium"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Financials & Lifespan</h2>
+            </div>
+            <div class="card-body">
+              <div class="detail-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                  <div class="text-xs text-muted">Purchase Cost</div>
+                  <div id="asset-cost" class="font-medium"></div>
+                </div>
+                <div>
+                  <div class="text-xs text-muted">Current Value</div>
+                  <div id="asset-value" class="font-medium text-success"></div>
+                </div>
+                <div>
+                  <div class="text-xs text-muted">Purchase Date</div>
+                  <div id="asset-pdate" class="font-medium"></div>
+                </div>
+                <div>
+                  <div class="text-xs text-muted">Warranty Expiry</div>
+                  <div id="asset-warranty" class="font-medium"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Description</h2>
+          </div>
+          <div class="card-body" id="asset-description">
+            <!-- description -->
+          </div>
+        </div>
+
+        <div class="card mt-6">
+          <div class="card-header">
+            <h2 class="card-title">Asset History</h2>
+          </div>
+          <div class="table-container">
+            <table id="history-table">
+              <!-- history will be here if we fetch it -->
+              <tbody><tr><td class="text-muted text-center" style="padding: 20px;">History logs are shown in Activity Logs</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { App, fmt, badge, Toast } from '../assets/js/core/app.js';
+    import { assetsApi } from '../assets/js/core/api.js';
+    import { renderLayout } from '../assets/js/components/layout.js';
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      renderLayout('assets');
+      await App.init();
+      
+      const params = new URLSearchParams(window.location.search);
+      const assetId = params.get('id');
+      
+      if (!assetId) {
+        window.location.href = 'assets.html';
+        return;
+      }
+
+      loadAssetData(assetId);
+    });
+
+    async function loadAssetData(id) {
+      try {
+        const res = await assetsApi.getById(id);
+        const asset = res.data;
+
+        document.getElementById('asset-name').textContent = asset.name;
+        document.getElementById('asset-tag').textContent = asset.asset_tag;
+        
+        document.getElementById('asset-status').innerHTML = badge(asset.status);
+        document.getElementById('asset-category').textContent = asset.category?.name || '—';
+        document.getElementById('asset-department').textContent = asset.department?.name || '—';
+        document.getElementById('asset-sn').textContent = asset.serial_number || '—';
+        document.getElementById('asset-vendor').textContent = asset.vendor || '—';
+        document.getElementById('asset-location').textContent = asset.location || '—';
+
+        document.getElementById('asset-cost').textContent = fmt.currency(asset.purchase_cost);
+        document.getElementById('asset-value').textContent = fmt.currency(asset.current_value);
+        document.getElementById('asset-pdate').textContent = fmt.date(asset.purchase_date) || '—';
+        document.getElementById('asset-warranty').textContent = fmt.date(asset.warranty_expiry) || '—';
+
+        document.getElementById('asset-description').textContent = asset.description || 'No description provided.';
+        
+        // render actions
+        const actionsContainer = document.getElementById('asset-actions');
+        actionsContainer.style.display = 'flex';
+        
+        if (['admin', 'asset_manager'].includes(App.user.role)) {
+          if (asset.status === 'available') {
+            actionsContainer.innerHTML += `<button class="btn btn-secondary" onclick="retireAsset('${asset.id}')">Retire Asset</button>`;
+          }
+        }
+      } catch (err) {
+        Toast.error('Error', 'Failed to load asset details');
+      }
+    }
+
+    window.retireAsset = async function(id) {
+      if (!confirm("Are you sure you want to retire this asset?")) return;
+      try {
+        await assetsApi.updateStatus(id, 'retired');
+        Toast.success('Success', 'Asset retired');
+        setTimeout(() => window.location.reload(), 1000);
+      } catch (e) {
+        Toast.error('Error', e.message);
+      }
+    }
+  </script>
+</body>
+</html>

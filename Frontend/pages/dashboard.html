@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — AssetFlow</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <main class="main-content" id="main-content">
+      <div class="page-container">
+        
+        <div class="page-header">
+          <div class="page-title">
+            <h1>Dashboard</h1>
+            <p>Welcome back! Here's what's happening with your assets today.</p>
+          </div>
+          <div class="page-actions">
+            <a href="assets.html" class="btn btn-primary" data-role="admin,asset_manager">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              Add Asset
+            </a>
+          </div>
+        </div>
+
+        <!-- KPI Grid -->
+        <div class="kpi-grid">
+          <div class="kpi-card" style="--kpi-color: var(--color-primary)">
+            <div class="kpi-icon" style="background: #eff6ff"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:24px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg></div>
+            <div class="kpi-content">
+              <div class="kpi-label">Total Assets</div>
+              <div class="kpi-value" id="kpi-total">--</div>
+            </div>
+          </div>
+          
+          <div class="kpi-card" style="--kpi-color: var(--color-success)">
+            <div class="kpi-icon" style="background: var(--color-success-light)"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:24px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+            <div class="kpi-content">
+              <div class="kpi-label">Available</div>
+              <div class="kpi-value" id="kpi-available">--</div>
+            </div>
+          </div>
+
+          <div class="kpi-card" style="--kpi-color: var(--color-info)">
+            <div class="kpi-icon" style="background: var(--color-info-light)"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:24px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg></div>
+            <div class="kpi-content">
+              <div class="kpi-label">Allocated</div>
+              <div class="kpi-value" id="kpi-allocated">--</div>
+            </div>
+          </div>
+
+          <div class="kpi-card" style="--kpi-color: var(--color-warning)">
+            <div class="kpi-icon" style="background: var(--color-warning-light)"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:24px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div>
+            <div class="kpi-content">
+              <div class="kpi-label">Under Maintenance</div>
+              <div class="kpi-value" id="kpi-maintenance">--</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="grid-2 mb-6">
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Asset Status Distribution</h2>
+            </div>
+            <div class="card-body">
+              <canvas id="statusChart" height="250"></canvas>
+            </div>
+          </div>
+          
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Assets by Category</h2>
+            </div>
+            <div class="card-body">
+              <canvas id="categoryChart" height="250"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Activity Table -->
+        <div class="card mb-6" data-role="admin,asset_manager">
+          <div class="card-header">
+            <h2 class="card-title">Recent Activity Logs</h2>
+            <a href="activity-logs.html" class="btn btn-secondary btn-sm">View All</a>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>User</th>
+                  <th>Action</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody id="activity-tbody">
+                <tr><td colspan="4" class="empty-message" style="text-align:center;padding:24px;">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { App, fmt, badge, renderSkeletonRows } from '../assets/js/core/app.js';
+    import { dashboardApi, activityLogsApi } from '../assets/js/core/api.js';
+    import { renderLayout } from '../assets/js/components/layout.js';
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      renderLayout('dashboard');
+      await App.init();
+      App.initSidebarState();
+
+      // UI Bindings
+      document.getElementById('sidebar-toggle').addEventListener('click', () => App.toggleSidebar());
+      document.getElementById('logout-btn').addEventListener('click', () => App.logout());
+      document.getElementById('sidebar-overlay').addEventListener('click', () => App.toggleSidebar());
+
+      loadDashboard();
+    });
+
+    async function loadDashboard() {
+      try {
+        const [dashRes, logsRes] = await Promise.all([
+          dashboardApi.get(),
+          App.user.role === 'admin' || App.user.role === 'asset_manager' ? 
+            activityLogsApi.list({ per_page: 5 }) : Promise.resolve({ data: { items: [] } })
+        ]);
+
+        const data = dashRes.data;
+        
+        // Update KPIs
+        document.getElementById('kpi-total').textContent = data.kpis?.total_assets || 0;
+        document.getElementById('kpi-available').textContent = data.kpis?.available || 0;
+        document.getElementById('kpi-allocated').textContent = data.kpis?.allocated || 0;
+        document.getElementById('kpi-maintenance').textContent = data.kpis?.under_maintenance || 0;
+
+        // Init Charts
+        initStatusChart(data.asset_by_status || {});
+        initCategoryChart(data.category_counts || {});
+
+        // Render Logs
+        const tbody = document.getElementById('activity-tbody');
+        if (tbody) {
+          const items = logsRes.data.items;
+          if (items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-message" style="text-align:center;padding:24px;">No recent activity</td></tr>';
+          } else {
+            tbody.innerHTML = items.map(log => `
+              <tr>
+                <td style="white-space:nowrap;color:var(--color-text-secondary)">${fmt.timeAgo(log.created_at)}</td>
+                <td class="font-medium">${log.user_name}</td>
+                <td><span class="badge badge-info">${log.action}</span></td>
+                <td>${log.description}</td>
+              </tr>
+            `).join('');
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load dashboard:', err);
+      }
+    }
+
+    function initStatusChart(counts) {
+      const ctx = document.getElementById('statusChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Available', 'Allocated', 'Maintenance', 'Reserved'],
+          datasets: [{
+            data: [counts.available || 0, counts.allocated || 0, counts.under_maintenance || 0, counts.reserved || 0],
+            backgroundColor: ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20 } }
+          },
+          cutout: '70%'
+        }
+      });
+    }
+
+    function initCategoryChart(counts) {
+      const labels = Object.keys(counts);
+      const data = Object.values(counts);
+      
+      const ctx = document.getElementById('categoryChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Assets',
+            data: data,
+            backgroundColor: '#2563EB',
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, grid: { borderDash: [2, 4], color: '#E2E8F0' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>

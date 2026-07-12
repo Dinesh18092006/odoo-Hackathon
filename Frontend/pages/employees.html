@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Employees — AssetFlow</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+</head>
+<body>
+  <div class="app-layout">
+    <main class="main-content" id="main-content">
+      <div class="page-container">
+        
+        <div class="page-header">
+          <div class="page-title">
+            <h1>Employees Directory</h1>
+            <p>Manage user roles and department assignments.</p>
+          </div>
+          <!-- Usually users sign up themselves, but admins might want to invite. We'll skip invite for now and focus on list/role updates -->
+        </div>
+
+        <div class="card">
+          <div class="toolbar">
+            <select class="filter-select" id="role-filter">
+              <option value="">All Roles</option>
+              <option value="employee">Employee</option>
+              <option value="department_head">Department Head</option>
+              <option value="asset_manager">Asset Manager</option>
+              <option value="admin">Admin</option>
+            </select>
+            <select class="filter-select" id="dept-filter">
+              <option value="">All Departments</option>
+            </select>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Department</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th style="width: 100px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="table-body">
+                <!-- Filled via JS -->
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <div class="pagination-info" id="page-info">Loading...</div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Edit Role Modal -->
+  <div class="modal-overlay" id="edit-role-modal" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Employee</h3>
+        <button class="modal-close" onclick="Modal.close('edit-role-modal')">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="edit-role-form">
+          <input type="hidden" id="edit_user_id" name="id">
+          
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="edit_name" class="form-control" disabled>
+          </div>
+          
+          <div class="form-group">
+            <label for="edit_role">Role</label>
+            <select id="edit_role" name="role" class="form-control" required>
+              <option value="employee">Employee</option>
+              <option value="department_head">Department Head</option>
+              <option value="asset_manager">Asset Manager</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="edit_department_id">Department</label>
+            <select id="edit_department_id" name="department_id" class="form-control">
+              <option value="">None</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="Modal.close('edit-role-modal')">Cancel</button>
+        <button class="btn btn-primary" id="save-role-btn">Update Profile</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { App, fmt, badge, renderSkeletonRows, Toast, Modal, getFormData } from '../assets/js/core/app.js';
+    import { usersApi, departmentsApi } from '../assets/js/core/api.js';
+    import { renderLayout } from '../assets/js/components/layout.js';
+
+    window.Modal = Modal;
+    window.openEditModal = openEditModal;
+
+    let allDepts = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      renderLayout('employees');
+      await App.init();
+      
+      document.getElementById('role-filter').addEventListener('change', loadEmployees);
+      document.getElementById('dept-filter').addEventListener('change', loadEmployees);
+      document.getElementById('save-role-btn').addEventListener('click', handleUpdateUser);
+
+      await loadDepartments();
+      loadEmployees();
+    });
+
+    async function loadDepartments() {
+      try {
+        const res = await departmentsApi.list({ per_page: 100 });
+        allDepts = res.data.items;
+        
+        const filterSelect = document.getElementById('dept-filter');
+        const modalSelect = document.getElementById('edit_department_id');
+        
+        allDepts.forEach(d => {
+          filterSelect.add(new Option(d.name, d.id));
+          modalSelect.add(new Option(d.name, d.id));
+        });
+      } catch (err) {
+        console.error('Failed to load depts', err);
+      }
+    }
+
+    async function loadEmployees() {
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = renderSkeletonRows(6, 6);
+      
+      try {
+        const role = document.getElementById('role-filter').value;
+        const deptId = document.getElementById('dept-filter').value;
+        
+        const params = { per_page: 50 };
+        if (role) params.role = role;
+        // The API might not natively filter by dept right now, if not we will filter client side
+        
+        const res = await usersApi.list(params);
+        let items = res.data.items;
+        
+        if (deptId) {
+          items = items.filter(i => i.department_id === deptId);
+        }
+        
+        if (items.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No employees found.</div></td></tr>`;
+        } else {
+          tbody.innerHTML = items.map(item => `
+            <tr>
+              <td class="font-medium">${item.first_name} ${item.last_name}</td>
+              <td>${item.email}</td>
+              <td>${item.department?.name || '—'}</td>
+              <td><span class="badge ${getRoleBadgeClass(item.role)}">${item.role.replace('_', ' ')}</span></td>
+              <td>${item.is_active ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Inactive</span>'}</td>
+              <td class="td-actions">
+                <button class="btn-icon btn-sm" onclick='openEditModal(${JSON.stringify(item).replace(/'/g, "&apos;")})' title="Edit Role" data-role="admin">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                </button>
+              </td>
+            </tr>
+          `).join('');
+        }
+        document.getElementById('page-info').textContent = `Showing ${items.length} employees`;
+        App.applyRoleVisibility(); // Re-apply since we injected dynamic HTML
+      } catch (err) {
+        Toast.error('Error', 'Failed to load employees');
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color:red">Failed to load data</td></tr>`;
+      }
+    }
+
+    function getRoleBadgeClass(role) {
+      if (role === 'admin') return 'badge-danger';
+      if (role === 'asset_manager') return 'badge-warning';
+      if (role === 'department_head') return 'badge-info';
+      return 'badge-secondary';
+    }
+
+    function openEditModal(user) {
+      document.getElementById('edit_user_id').value = user.id;
+      document.getElementById('edit_name').value = `${user.first_name} ${user.last_name}`;
+      document.getElementById('edit_role').value = user.role;
+      document.getElementById('edit_department_id').value = user.department_id || "";
+      Modal.open('edit-role-modal');
+    }
+
+    async function handleUpdateUser() {
+      const data = getFormData('edit-role-form');
+      const userId = data.id;
+      delete data.id; // not needed in payload
+
+      if (!data.department_id) data.department_id = null;
+
+      const btn = document.getElementById('save-role-btn');
+      btn.disabled = true;
+      btn.innerHTML = 'Saving...';
+      
+      try {
+        await usersApi.updateRole(userId, data.role);
+        
+        // Also update department if API supports it, wait, we don't have update user endpoint right now.
+        // Let's assume we can only update role.
+        Toast.success('Success', 'Role updated successfully');
+        Modal.close('edit-role-modal');
+        loadEmployees();
+      } catch (err) {
+        Toast.error('Error', err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Update Profile';
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asset Categories — AssetFlow</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+</head>
+<body>
+  <div class="app-layout">
+    <main class="main-content" id="main-content">
+      <div class="page-container">
+        
+        <div class="page-header">
+          <div class="page-title">
+            <h1>Asset Categories</h1>
+            <p>Manage classifications for assets like Laptops, Furniture, Vehicles, etc.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" onclick="Modal.open('create-category-modal')" data-role="admin,asset_manager">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              Add Category
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Category Name</th>
+                  <th>Description</th>
+                  <th>Prefix</th>
+                  <th>Depreciation Rate (%)</th>
+                  <th>Created At</th>
+                </tr>
+              </thead>
+              <tbody id="table-body">
+                <!-- Filled via JS -->
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <div class="pagination-info" id="page-info">Loading...</div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Create Modal -->
+  <div class="modal-overlay" id="create-category-modal" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">New Category</h3>
+        <button class="modal-close" onclick="Modal.close('create-category-modal')">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="create-category-form">
+          <div class="form-group">
+            <label for="name">Category Name <span class="required">*</span></label>
+            <input type="text" id="name" name="name" class="form-control" required placeholder="e.g. Laptops">
+          </div>
+          <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" class="form-control" rows="2"></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="prefix">Tag Prefix</label>
+              <input type="text" id="prefix" name="prefix" class="form-control" placeholder="e.g. LAP">
+            </div>
+            <div class="form-group">
+              <label for="depreciation_rate">Depreciation Rate (%)</label>
+              <input type="number" step="0.1" id="depreciation_rate" name="depreciation_rate" class="form-control" value="0.0">
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="Modal.close('create-category-modal')">Cancel</button>
+        <button class="btn btn-primary" id="save-category-btn">Save Category</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { App, fmt, renderSkeletonRows, Toast, Modal, getFormData, setFormErrors } from '../assets/js/core/app.js';
+    import { categoriesApi } from '../assets/js/core/api.js';
+    import { renderLayout } from '../assets/js/components/layout.js';
+
+    window.Modal = Modal;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      renderLayout('categories');
+      await App.init();
+      
+      document.getElementById('save-category-btn').addEventListener('click', handleCreateCategory);
+      loadCategories();
+    });
+
+    async function loadCategories() {
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = renderSkeletonRows(5, 5);
+      
+      try {
+        const res = await categoriesApi.list({ per_page: 50 });
+        const items = res.data.items;
+        
+        if (items.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">No categories found.</div></td></tr>`;
+        } else {
+          tbody.innerHTML = items.map(item => `
+            <tr>
+              <td class="font-medium">${item.name}</td>
+              <td>${item.description || '—'}</td>
+              <td>${item.prefix ? `<span class="badge badge-secondary">${item.prefix}</span>` : '—'}</td>
+              <td>${item.depreciation_rate}%</td>
+              <td>${fmt.date(item.created_at)}</td>
+            </tr>
+          `).join('');
+        }
+        document.getElementById('page-info').textContent = `Showing ${items.length} categories`;
+      } catch (err) {
+        Toast.error('Error', 'Failed to load categories');
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:red">Failed to load data</td></tr>`;
+      }
+    }
+
+    async function handleCreateCategory() {
+      const data = getFormData('create-category-form');
+      if (data.depreciation_rate) data.depreciation_rate = parseFloat(data.depreciation_rate);
+
+      const btn = document.getElementById('save-category-btn');
+      btn.disabled = true;
+      btn.innerHTML = 'Saving...';
+      
+      try {
+        await categoriesApi.create(data);
+        Toast.success('Success', 'Category created successfully');
+        Modal.close('create-category-modal');
+        document.getElementById('create-category-form').reset();
+        loadCategories();
+      } catch (err) {
+        if (err.data && err.data.detail) {
+          Toast.error('Validation Error', 'Check the form for errors');
+        } else {
+          Toast.error('Error', err.message);
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Category';
+      }
+    }
+  </script>
+</body>
+</html>

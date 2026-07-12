@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Departments — AssetFlow</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+</head>
+<body>
+  <div class="app-layout">
+    <main class="main-content" id="main-content">
+      <div class="page-container">
+        
+        <div class="page-header">
+          <div class="page-title">
+            <h1>Departments</h1>
+            <p>Manage organizational departments and their cost centers.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" onclick="Modal.open('create-dept-modal')" data-role="admin">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              Add Department
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Department Name</th>
+                  <th>Cost Center</th>
+                  <th>Manager</th>
+                  <th>Location</th>
+                  <th>Created At</th>
+                </tr>
+              </thead>
+              <tbody id="table-body">
+                <!-- Filled via JS -->
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <div class="pagination-info" id="page-info">Loading...</div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Create Modal -->
+  <div class="modal-overlay" id="create-dept-modal" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">New Department</h3>
+        <button class="modal-close" onclick="Modal.close('create-dept-modal')">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="create-dept-form">
+          <div class="form-group">
+            <label for="name">Department Name <span class="required">*</span></label>
+            <input type="text" id="name" name="name" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label for="cost_center">Cost Center ID</label>
+            <input type="text" id="cost_center" name="cost_center" class="form-control">
+          </div>
+          <div class="form-group">
+            <label for="manager_id">Manager</label>
+            <select id="manager_id" name="manager_id" class="form-control">
+              <option value="">Select Manager</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="location">Location (HQ, Branch, etc.)</label>
+            <input type="text" id="location" name="location" class="form-control">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="Modal.close('create-dept-modal')">Cancel</button>
+        <button class="btn btn-primary" id="save-dept-btn">Save Department</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { App, fmt, renderSkeletonRows, Toast, Modal, getFormData, setFormErrors } from '../assets/js/core/app.js';
+    import { departmentsApi, usersApi } from '../assets/js/core/api.js';
+    import { renderLayout } from '../assets/js/components/layout.js';
+
+    window.Modal = Modal;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      renderLayout('departments');
+      await App.init();
+      
+      document.getElementById('save-dept-btn').addEventListener('click', handleCreateDept);
+
+      loadManagers();
+      loadDepartments();
+    });
+
+    async function loadManagers() {
+      try {
+        const res = await usersApi.list({ per_page: 100, role: 'department_head' });
+        const select = document.getElementById('manager_id');
+        res.data.items.forEach(u => {
+          select.add(new Option(`${u.first_name} ${u.last_name}`, u.id));
+        });
+      } catch (err) {
+        console.error('Failed to load managers', err);
+      }
+    }
+
+    async function loadDepartments() {
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = renderSkeletonRows(5, 5);
+      
+      try {
+        const res = await departmentsApi.list({ per_page: 50 });
+        const items = res.data.items;
+        
+        if (items.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">No departments found.</div></td></tr>`;
+        } else {
+          tbody.innerHTML = items.map(item => `
+            <tr>
+              <td class="font-medium">${item.name}</td>
+              <td>${item.cost_center || '—'}</td>
+              <td>${item.manager ? (item.manager.first_name + ' ' + item.manager.last_name) : '—'}</td>
+              <td>${item.location || '—'}</td>
+              <td>${fmt.date(item.created_at)}</td>
+            </tr>
+          `).join('');
+        }
+        document.getElementById('page-info').textContent = `Showing ${items.length} departments`;
+      } catch (err) {
+        Toast.error('Error', 'Failed to load departments');
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:red">Failed to load data</td></tr>`;
+      }
+    }
+
+    async function handleCreateDept() {
+      const data = getFormData('create-dept-form');
+      if (!data.manager_id) delete data.manager_id;
+
+      const btn = document.getElementById('save-dept-btn');
+      btn.disabled = true;
+      btn.innerHTML = 'Saving...';
+      
+      try {
+        await departmentsApi.create(data);
+        Toast.success('Success', 'Department created successfully');
+        Modal.close('create-dept-modal');
+        document.getElementById('create-dept-form').reset();
+        loadDepartments();
+      } catch (err) {
+        if (err.data && err.data.detail) {
+          Toast.error('Validation Error', 'Check the form for errors');
+        } else {
+          Toast.error('Error', err.message);
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Department';
+      }
+    }
+  </script>
+</body>
+</html>

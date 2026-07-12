@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Activity Logs — AssetFlow</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+</head>
+<body>
+  <div class="app-layout">
+    <main class="main-content" id="main-content">
+      <div class="page-container">
+        
+        <div class="page-header">
+          <div class="page-title">
+            <h1>Activity Logs</h1>
+            <p>System-wide audit trail of all actions and modifications.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="toolbar">
+            <div class="search-box">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+              <input type="text" id="search-input" placeholder="Search logs..." autocomplete="off">
+            </div>
+            <select class="filter-select" id="action-filter">
+              <option value="">All Actions</option>
+              <option value="create">Create</option>
+              <option value="update">Update</option>
+              <option value="delete">Delete</option>
+              <option value="login">Login</option>
+            </select>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>User</th>
+                  <th>Action</th>
+                  <th>Resource</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody id="table-body">
+                <!-- Filled via JS -->
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <div class="pagination-info" id="page-info">Loading...</div>
+            <div class="pagination-controls">
+              <button class="page-btn" id="prev-btn">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+              </button>
+              <button class="page-btn" id="next-btn">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { App, fmt, badge, renderSkeletonRows, debounce } from '../assets/js/core/app.js';
+    import { activityLogsApi } from '../assets/js/core/api.js';
+    import { renderLayout } from '../assets/js/components/layout.js';
+
+    let currentPage = 1;
+    let hasMorePages = false;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      renderLayout('activity-logs');
+      await App.init();
+      
+      document.getElementById('search-input').addEventListener('input', debounce(() => { currentPage = 1; loadLogs(); }, 500));
+      document.getElementById('action-filter').addEventListener('change', () => { currentPage = 1; loadLogs(); });
+      
+      document.getElementById('prev-btn').addEventListener('click', () => { if (currentPage > 1) { currentPage--; loadLogs(); } });
+      document.getElementById('next-btn').addEventListener('click', () => { if (hasMorePages) { currentPage++; loadLogs(); } });
+
+      loadLogs();
+    });
+
+    async function loadLogs() {
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = renderSkeletonRows(10, 5);
+      
+      try {
+        const params = {
+          page: currentPage,
+          per_page: 20,
+          search: document.getElementById('search-input').value,
+          action: document.getElementById('action-filter').value
+        };
+
+        const res = await activityLogsApi.list(params);
+        // The API returns paginated model. We need to handle it depending on if it has .items or not
+        const { items, total, pages, page } = res.pagination ? res.data : { items: res.data.items, total: res.data.total, pages: res.data.pages, page: res.data.page };
+        
+        if (items.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">No activity logs found.</div></td></tr>`;
+        } else {
+          tbody.innerHTML = items.map(item => `
+            <tr>
+              <td style="white-space:nowrap;color:var(--color-text-secondary)">${fmt.datetime(item.created_at)}</td>
+              <td class="font-medium">${item.user_name || 'System'}</td>
+              <td><span class="badge ${getActionBadge(item.action)}">${item.action}</span></td>
+              <td>${item.resource_type || '—'} <span class="text-xs text-muted">${item.resource_id ? '('+item.resource_id.substring(0,8)+')' : ''}</span></td>
+              <td>${item.description}</td>
+            </tr>
+          `).join('');
+        }
+
+        // Update pagination
+        document.getElementById('page-info').textContent = `Showing ${(page-1)*20 + (items.length ? 1 : 0)} to ${(page-1)*20 + items.length} of ${total} results`;
+        document.getElementById('prev-btn').disabled = page <= 1;
+        document.getElementById('next-btn').disabled = page >= pages;
+        hasMorePages = page < pages;
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:var(--color-danger);padding:24px">Failed to load data</td></tr>`;
+      }
+    }
+
+    function getActionBadge(action) {
+      if (action === 'create') return 'badge-success';
+      if (action === 'update') return 'badge-info';
+      if (action === 'delete') return 'badge-danger';
+      return 'badge-secondary';
+    }
+  </script>
+</body>
+</html>

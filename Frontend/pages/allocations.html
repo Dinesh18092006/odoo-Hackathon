@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Allocations — AssetFlow</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+</head>
+<body>
+  <div class="app-layout">
+    <main class="main-content" id="main-content">
+      <div class="page-container">
+        
+        <div class="page-header">
+          <div class="page-title">
+            <h1>Asset Allocations</h1>
+            <p>Manage asset assignments and requests to employees.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" onclick="Modal.open('request-modal')">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              Request Asset
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="toolbar">
+            <select class="filter-select" id="status-filter">
+              <option value="">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="active">Active</option>
+              <option value="rejected">Rejected</option>
+              <option value="returned">Returned</option>
+            </select>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Asset</th>
+                  <th>Employee</th>
+                  <th>Status</th>
+                  <th>Allocated At</th>
+                  <th>Expected Return</th>
+                  <th style="width: 120px">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="table-body">
+                <!-- Filled via JS -->
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <div class="pagination-info" id="page-info">Loading...</div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Request Modal -->
+  <div class="modal-overlay" id="request-modal" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Request Asset Allocation</h3>
+        <button class="modal-close" onclick="Modal.close('request-modal')">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="request-form">
+          <div class="form-group" data-role="admin,asset_manager,department_head">
+            <label for="user_id">Assign To Employee <span class="required">*</span></label>
+            <select id="user_id" name="user_id" class="form-control">
+              <!-- Will be disabled/hidden for regular employees -->
+            </select>
+            <div class="form-hint">Leave blank to assign to yourself.</div>
+          </div>
+          <div class="form-group">
+            <label for="asset_id">Select Asset <span class="required">*</span></label>
+            <select id="asset_id" name="asset_id" class="form-control" required>
+              <option value="">Choose an available asset...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="expected_return_date">Expected Return Date</label>
+            <input type="date" id="expected_return_date" name="expected_return_date" class="form-control">
+          </div>
+          <div class="form-group">
+            <label for="notes">Notes</label>
+            <textarea id="notes" name="notes" class="form-control" rows="2"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="Modal.close('request-modal')">Cancel</button>
+        <button class="btn btn-primary" id="save-request-btn">Submit Request</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { App, fmt, badge, renderSkeletonRows, Toast, Modal, getFormData } from '../assets/js/core/app.js';
+    import { allocationsApi, assetsApi, usersApi } from '../assets/js/core/api.js';
+    import { renderLayout } from '../assets/js/components/layout.js';
+
+    window.Modal = Modal;
+    window.handleAction = handleAction;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      renderLayout('allocations');
+      await App.init();
+      
+      document.getElementById('status-filter').addEventListener('change', loadAllocations);
+      document.getElementById('save-request-btn').addEventListener('click', handleSubmitRequest);
+
+      if (['admin', 'asset_manager', 'department_head'].includes(App.user.role)) {
+        loadUsers();
+      }
+      loadAvailableAssets();
+      loadAllocations();
+    });
+
+    async function loadUsers() {
+      try {
+        const res = await usersApi.list({ per_page: 100 });
+        const select = document.getElementById('user_id');
+        select.add(new Option('Self', ''));
+        res.data.items.forEach(u => {
+          if (u.id !== App.user.id) {
+            select.add(new Option(`${u.first_name} ${u.last_name} (${u.email})`, u.id));
+          }
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function loadAvailableAssets() {
+      try {
+        // Fetch available assets
+        const res = await assetsApi.list({ status: 'available', per_page: 100 });
+        const select = document.getElementById('asset_id');
+        res.data.items.forEach(a => {
+          select.add(new Option(`${a.name} [${a.asset_tag}]`, a.id));
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function loadAllocations() {
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = renderSkeletonRows(6, 6);
+      
+      try {
+        const status = document.getElementById('status-filter').value;
+        const params = { per_page: 50 };
+        if (status) params.status = status;
+        
+        const res = await allocationsApi.list(params);
+        const items = res.data.items;
+        
+        if (items.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No allocations found.</div></td></tr>`;
+        } else {
+          tbody.innerHTML = items.map(item => `
+            <tr>
+              <td class="font-medium">${item.asset?.name || 'Unknown'} <span class="text-xs text-muted">(${item.asset?.asset_tag || ''})</span></td>
+              <td>${item.user?.first_name} ${item.user?.last_name}</td>
+              <td>${badge(item.status)}</td>
+              <td>${fmt.date(item.allocated_at) || '—'}</td>
+              <td>${fmt.date(item.expected_return_date) || '—'}</td>
+              <td class="td-actions">
+                ${renderActions(item)}
+              </td>
+            </tr>
+          `).join('');
+        }
+        document.getElementById('page-info').textContent = `Showing ${items.length} allocations`;
+      } catch (err) {
+        Toast.error('Error', 'Failed to load allocations');
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color:red">Failed to load data</td></tr>`;
+      }
+    }
+
+    function renderActions(item) {
+      const role = App.user.role;
+      const isManager = role === 'admin' || role === 'asset_manager';
+      let html = '';
+
+      if (item.status === 'pending' && isManager) {
+        html += `<button class="btn-icon btn-sm" style="color:var(--color-success)" onclick="handleAction('${item.id}', 'approve')" title="Approve">✓</button>`;
+        html += `<button class="btn-icon btn-sm" style="color:var(--color-danger)" onclick="handleAction('${item.id}', 'reject')" title="Reject">✕</button>`;
+      }
+      
+      if (item.status === 'approved' && isManager) {
+         html += `<button class="btn btn-secondary btn-sm" onclick="handleAction('${item.id}', 'checkout')">Checkout</button>`;
+      }
+      
+      if (item.status === 'active' && (isManager || item.user_id === App.user.id)) {
+        html += `<button class="btn btn-secondary btn-sm" onclick="handleAction('${item.id}', 'return')">Return</button>`;
+      }
+
+      return html || '—';
+    }
+
+    async function handleAction(id, action) {
+      try {
+        if (action === 'approve') await allocationsApi.approve(id);
+        if (action === 'reject') await allocationsApi.reject(id);
+        if (action === 'checkout') await allocationsApi.checkout(id);
+        if (action === 'return') await allocationsApi.returnAsset(id, { condition: 'good', notes: 'Returned from UI' });
+        
+        Toast.success('Success', `Allocation ${action}ed`);
+        loadAllocations();
+      } catch (err) {
+        Toast.error('Error', err.message);
+      }
+    }
+
+    async function handleSubmitRequest() {
+      const data = getFormData('request-form');
+      if (!data.user_id) data.user_id = App.user.id; // Self assign if empty
+
+      const btn = document.getElementById('save-request-btn');
+      btn.disabled = true;
+      btn.innerHTML = 'Submitting...';
+      
+      try {
+        await allocationsApi.request(data);
+        Toast.success('Success', 'Request submitted successfully');
+        Modal.close('request-modal');
+        document.getElementById('request-form').reset();
+        loadAllocations();
+      } catch (err) {
+        Toast.error('Error', err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Submit Request';
+      }
+    }
+  </script>
+</body>
+</html>

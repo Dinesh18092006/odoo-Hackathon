@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notifications — AssetFlow</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+</head>
+<body>
+  <div class="app-layout">
+    <main class="main-content" id="main-content">
+      <div class="page-container" style="max-width: 800px; margin: 0 auto;">
+        
+        <div class="page-header">
+          <div class="page-title">
+            <h1>Notifications</h1>
+            <p>Your alerts, approvals, and reminders.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-secondary" onclick="markAllRead()">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+              Mark all as read
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div id="notifications-list" class="notifications-list">
+            <!-- Filled via JS -->
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <style>
+    .notifications-list { display: flex; flex-direction: column; }
+    .notification-item { padding: 16px 24px; border-bottom: 1px solid var(--border-color); display: flex; gap: 16px; transition: background 0.2s; cursor: pointer; }
+    .notification-item:hover { background: #f8fafc; }
+    .notification-item:last-child { border-bottom: none; }
+    .notification-item.unread { background: #eff6ff; }
+    .notification-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .notification-content { flex: 1; }
+    .notification-title { font-weight: 600; color: var(--color-text); margin-bottom: 4px; }
+    .notification-message { color: var(--color-text-secondary); font-size: 0.875rem; margin-bottom: 8px; }
+    .notification-time { color: var(--color-text-muted); font-size: 0.75rem; }
+  </style>
+
+  <script type="module">
+    import { App, fmt, Toast } from '../assets/js/core/app.js';
+    import { notificationsApi } from '../assets/js/core/api.js';
+    import { renderLayout } from '../assets/js/components/layout.js';
+
+    window.markAllRead = markAllRead;
+    window.markReadAndGo = markReadAndGo;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      renderLayout('notifications');
+      await App.init();
+      loadNotifications();
+    });
+
+    async function loadNotifications() {
+      const list = document.getElementById('notifications-list');
+      list.innerHTML = '<div style="padding:40px;text-align:center;">Loading notifications...</div>';
+      
+      try {
+        const res = await notificationsApi.list({ per_page: 50 });
+        const items = res.data.items;
+        
+        if (items.length === 0) {
+          list.innerHTML = `
+            <div class="empty-state" style="padding: 60px 20px;">
+              <div class="empty-icon" style="font-size:48px;margin-bottom:16px;">📭</div>
+              <div class="empty-title">You're all caught up!</div>
+              <div class="empty-message">No new notifications at this time.</div>
+            </div>`;
+        } else {
+          list.innerHTML = items.map(item => `
+            <div class="notification-item ${item.is_read ? '' : 'unread'}" onclick="markReadAndGo('${item.id}', '${getLink(item)}')">
+              <div class="notification-icon" style="background: ${getIconBg(item.type)}; color: ${getIconColor(item.type)}">
+                ${getIcon(item.type)}
+              </div>
+              <div class="notification-content">
+                <div class="notification-title">${item.title}</div>
+                <div class="notification-message">${item.message}</div>
+                <div class="notification-time">${fmt.timeAgo(item.created_at)}</div>
+              </div>
+              ${!item.is_read ? '<div style="width:8px;height:8px;border-radius:50%;background:var(--color-primary);margin-top:6px;"></div>' : ''}
+            </div>
+          `).join('');
+        }
+      } catch (err) {
+        list.innerHTML = '<div style="padding:40px;text-align:center;color:red;">Failed to load notifications.</div>';
+      }
+    }
+
+    function getLink(item) {
+      if (item.type === 'allocation_request' || item.type === 'allocation_approved') return 'allocations.html';
+      if (item.type === 'maintenance_update') return 'maintenance.html';
+      if (item.type === 'transfer_request') return 'transfers.html';
+      if (item.type === 'booking_reminder') return 'bookings.html';
+      return '#';
+    }
+
+    function getIcon(type) {
+      if (type.includes('allocation')) return '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:20px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>';
+      if (type.includes('maintenance')) return '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:20px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>';
+      if (type.includes('booking')) return '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:20px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>';
+      return '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:20px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+    }
+
+    function getIconBg(type) {
+      if (type.includes('approved') || type === 'system') return 'var(--color-success-light)';
+      if (type.includes('rejected') || type.includes('overdue')) return 'var(--color-danger-light)';
+      if (type.includes('maintenance')) return 'var(--color-warning-light)';
+      return 'var(--color-primary-light)';
+    }
+
+    function getIconColor(type) {
+      if (type.includes('approved') || type === 'system') return 'var(--color-success)';
+      if (type.includes('rejected') || type.includes('overdue')) return 'var(--color-danger)';
+      if (type.includes('maintenance')) return 'var(--color-warning)';
+      return 'var(--color-primary)';
+    }
+
+    async function markReadAndGo(id, link) {
+      try {
+        await notificationsApi.markRead(id);
+      } catch (e) {}
+      if (link !== '#') window.location.href = link;
+      else loadNotifications();
+    }
+
+    async function markAllRead() {
+      try {
+        await notificationsApi.markAllRead();
+        Toast.success('Success', 'All notifications marked as read.');
+        loadNotifications();
+        App.updateUnreadCount();
+      } catch (err) {
+        Toast.error('Error', 'Failed to mark as read');
+      }
+    }
+  </script>
+</body>
+</html>

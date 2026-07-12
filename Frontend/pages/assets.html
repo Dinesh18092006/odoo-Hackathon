@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assets Registry — AssetFlow</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+</head>
+<body>
+  <div class="app-layout">
+    <main class="main-content" id="main-content">
+      <div class="page-container">
+        
+        <div class="page-header">
+          <div class="page-title">
+            <h1>Assets Registry</h1>
+            <p>Manage and track all physical assets in the organization.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-secondary" onclick="loadAssets()">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+              Refresh
+            </button>
+            <button class="btn btn-primary" onclick="Modal.open('create-asset-modal')" data-role="admin,asset_manager">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              Add Asset
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="toolbar">
+            <div class="search-box">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+              <input type="text" id="search-input" placeholder="Search by name, tag, serial..." autocomplete="off">
+            </div>
+            
+            <select class="filter-select" id="status-filter">
+              <option value="">All Statuses</option>
+              <option value="available">Available</option>
+              <option value="allocated">Allocated</option>
+              <option value="reserved">Reserved</option>
+              <option value="under_maintenance">Under Maintenance</option>
+              <option value="lost">Lost</option>
+              <option value="retired">Retired</option>
+            </select>
+            
+            <select class="filter-select" id="category-filter">
+              <option value="">All Categories</option>
+            </select>
+            
+            <select class="filter-select" id="department-filter">
+              <option value="">All Departments</option>
+            </select>
+          </div>
+
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Asset Tag</th>
+                  <th>Name</th>
+                  <th>Category</th>
+                  <th>Department</th>
+                  <th>Status</th>
+                  <th>Cost</th>
+                  <th style="width: 80px">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="table-body">
+                <!-- Filled via JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination">
+            <div class="pagination-info" id="page-info">Showing 0 of 0 results</div>
+            <div class="pagination-controls">
+              <button class="page-btn" id="prev-btn">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+              </button>
+              <button class="page-btn" id="next-btn">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Create Modal -->
+  <div class="modal-overlay" id="create-asset-modal" style="display:none;">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title">Register New Asset</h3>
+        <button class="modal-close" onclick="Modal.close('create-asset-modal')">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="create-asset-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="name">Asset Name <span class="required">*</span></label>
+              <input type="text" id="name" name="name" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label for="serial_number">Serial Number</label>
+              <input type="text" id="serial_number" name="serial_number" class="form-control">
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="category_id">Category <span class="required">*</span></label>
+              <select id="category_id" name="category_id" class="form-control" required></select>
+            </div>
+            <div class="form-group">
+              <label for="department_id">Department</label>
+              <select id="department_id" name="department_id" class="form-control"></select>
+            </div>
+          </div>
+
+          <div class="form-row cols-3">
+            <div class="form-group">
+              <label for="purchase_cost">Purchase Cost <span class="required">*</span></label>
+              <input type="number" step="0.01" id="purchase_cost" name="purchase_cost" class="form-control" value="0.00" required>
+            </div>
+            <div class="form-group">
+              <label for="purchase_date">Purchase Date</label>
+              <input type="date" id="purchase_date" name="purchase_date" class="form-control">
+            </div>
+            <div class="form-group">
+              <label for="warranty_expiry">Warranty Expiry</label>
+              <input type="date" id="warranty_expiry" name="warranty_expiry" class="form-control">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" class="form-control" rows="3"></textarea>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="vendor">Vendor</label>
+              <input type="text" id="vendor" name="vendor" class="form-control">
+            </div>
+            <div class="form-group">
+              <label for="location">Location</label>
+              <input type="text" id="location" name="location" class="form-control">
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="Modal.close('create-asset-modal')">Cancel</button>
+        <button class="btn btn-primary" id="save-asset-btn">Register Asset</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { App, fmt, badge, renderSkeletonRows, debounce, Toast, Modal, getFormData, setFormErrors, confirm } from '../assets/js/core/app.js';
+    import { assetsApi, categoriesApi, departmentsApi } from '../assets/js/core/api.js';
+    import { renderLayout } from '../assets/js/components/layout.js';
+
+    // Make functions globally available for inline event handlers
+    window.Modal = Modal;
+    window.loadAssets = loadAssets;
+    
+    let currentPage = 1;
+    let hasMorePages = false;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      renderLayout('assets');
+      await App.init();
+      
+      // Setup event listeners
+      document.getElementById('search-input').addEventListener('input', debounce(loadAssets, 500));
+      document.getElementById('status-filter').addEventListener('change', loadAssets);
+      document.getElementById('category-filter').addEventListener('change', loadAssets);
+      document.getElementById('department-filter').addEventListener('change', loadAssets);
+      
+      document.getElementById('prev-btn').addEventListener('click', () => { if (currentPage > 1) { currentPage--; loadAssets(); } });
+      document.getElementById('next-btn').addEventListener('click', () => { if (hasMorePages) { currentPage++; loadAssets(); } });
+
+      document.getElementById('save-asset-btn').addEventListener('click', handleCreateAsset);
+
+      // Initial load
+      await Promise.all([loadFilterOptions(), loadAssets()]);
+    });
+
+    async function loadFilterOptions() {
+      try {
+        const [catRes, deptRes] = await Promise.all([
+          categoriesApi.list({ per_page: 100 }),
+          departmentsApi.list({ per_page: 100 })
+        ]);
+        
+        const catFilter = document.getElementById('category-filter');
+        const catSelect = document.getElementById('category_id');
+        catRes.data.items.forEach(c => {
+          catFilter.add(new Option(c.name, c.id));
+          catSelect.add(new Option(c.name, c.id));
+        });
+
+        const deptFilter = document.getElementById('department-filter');
+        const deptSelect = document.getElementById('department_id');
+        deptSelect.add(new Option('None', ''));
+        deptRes.data.items.forEach(d => {
+          deptFilter.add(new Option(d.name, d.id));
+          deptSelect.add(new Option(d.name, d.id));
+        });
+      } catch (err) {
+        console.error('Failed to load filters', err);
+      }
+    }
+
+    async function loadAssets() {
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = renderSkeletonRows(10, 7);
+      
+      try {
+        const params = {
+          page: currentPage,
+          per_page: 20,
+          search: document.getElementById('search-input').value,
+          status: document.getElementById('status-filter').value,
+          category_id: document.getElementById('category-filter').value,
+          department_id: document.getElementById('department-filter').value,
+        };
+
+        const res = await assetsApi.list(params);
+        const { items, total, pages, page } = res.pagination ? res.data : { items: res.data.items, total: res.data.total, pages: res.data.pages, page: res.data.page };
+        
+        if (items.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7">
+            <div class="empty-state">
+              <div class="empty-icon">📦</div>
+              <div class="empty-title">No assets found</div>
+              <div class="empty-message">Try adjusting your filters or search query.</div>
+            </div>
+          </td></tr>`;
+        } else {
+          tbody.innerHTML = items.map(item => `
+            <tr>
+              <td class="font-medium">
+                <a href="asset-detail.html?id=${item.id}">${item.asset_tag}</a>
+              </td>
+              <td>
+                <div class="font-medium">${item.name}</div>
+                ${item.serial_number ? `<div class="text-xs text-muted">SN: ${item.serial_number}</div>` : ''}
+              </td>
+              <td>${item.category?.name || '—'}</td>
+              <td>${item.department?.name || '—'}</td>
+              <td>${badge(item.status)}</td>
+              <td>${fmt.currency(item.purchase_cost)}</td>
+              <td class="td-actions">
+                <a href="asset-detail.html?id=${item.id}" class="btn-icon btn-sm" title="View details">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                </a>
+              </td>
+            </tr>
+          `).join('');
+        }
+
+        // Update pagination
+        document.getElementById('page-info').textContent = `Showing ${(page-1)*20 + (items.length ? 1 : 0)} to ${(page-1)*20 + items.length} of ${total} results`;
+        document.getElementById('prev-btn').disabled = page <= 1;
+        document.getElementById('next-btn').disabled = page >= pages;
+        hasMorePages = page < pages;
+      } catch (err) {
+        Toast.error('Failed to load assets', err.message);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:var(--color-danger);padding:24px">Failed to load data</td></tr>`;
+      }
+    }
+
+    async function handleCreateAsset() {
+      const data = getFormData('create-asset-form');
+      if (data.purchase_cost) data.purchase_cost = parseFloat(data.purchase_cost);
+      
+      const btn = document.getElementById('save-asset-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Saving...';
+      
+      try {
+        await assetsApi.create(data);
+        Toast.success('Success', 'Asset created successfully');
+        Modal.close('create-asset-modal');
+        document.getElementById('create-asset-form').reset();
+        loadAssets();
+      } catch (err) {
+        if (err.data && err.data.detail && Array.isArray(err.data.detail)) {
+          const errors = {};
+          err.data.detail.forEach(d => { errors[d.loc[d.loc.length-1]] = d.msg; });
+          setFormErrors(errors);
+        } else {
+          Toast.error('Error', err.message);
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Register Asset';
+      }
+    }
+  </script>
+</body>
+</html>

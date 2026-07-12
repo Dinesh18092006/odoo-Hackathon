@@ -1,79 +1,113 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AssetFlow — Login</title>
-<link rel="stylesheet" href="style.css">
-<style>
-  .feature-list { list-style: none; display: flex; flex-direction: column; gap: 14px; }
-  .feature-list li { display: flex; align-items: flex-start; gap: 12px; color: rgba(255,255,255,0.75); font-size: 14px; }
-  .feature-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
-  .divider { display: flex; align-items: center; gap: 12px; color: var(--text-muted); font-size: 12px; margin: 6px 0; }
-  .divider::before, .divider::after { content:''; flex:1; height:1px; background:var(--border); }
-  .pass-wrap { position: relative; }
-  .pass-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 16px; }
-  .panel-title { font-family:'Sora',sans-serif; font-size:2.5rem; font-weight:800; color:#fff; line-height:1.15; margin-bottom:12px; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AssetFlow — Login</title>
+  <meta name="description" content="Sign in to AssetFlow Enterprise Asset Management System">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="assets/css/main.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <style>
+    .auth-page {
+      background: linear-gradient(135deg, #0f172a 0%, #1a2f6e 40%, #1e40af 100%);
+    }
+    .auth-bg-shapes {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .auth-shape {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.04);
+      animation: float 10s infinite ease-in-out;
+    }
+    .auth-shape:nth-child(1) { width: 400px; height: 400px; top: -100px; right: -100px; animation-delay: 0s; }
+    .auth-shape:nth-child(2) { width: 250px; height: 250px; bottom: 50px; left: -80px; animation-delay: 3s; }
+    .auth-shape:nth-child(3) { width: 150px; height: 150px; top: 40%; right: 15%; animation-delay: 6s; }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-20px); }
+    }
+    .or-divider {
+      display: flex; align-items: center; gap: 12px; margin: 20px 0;
+      font-size: 0.875rem; color: var(--color-text-muted);
+    }
+    .or-divider::before, .or-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--color-border);
+    }
+  </style>
 </head>
 <body>
-<div id="toast-container"></div>
+  <div class="auth-page">
+    <div class="auth-bg-shapes">
+      <div class="auth-shape"></div>
+      <div class="auth-shape"></div>
+      <div class="auth-shape"></div>
+    </div>
 
-<div class="auth-page">
-  <!-- Hero Panel -->
-  <div class="auth-hero">
-    <div>
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:32px;">
-        <div class="logo-icon" style="width:48px;height:48px;border-radius:12px;font-size:24px;">📦</div>
-        <span style="font-family:'Sora',sans-serif;font-weight:800;font-size:1.5rem;color:#fff;">Asset<span style="color:var(--teal)">Flow</span></span>
+    <div class="auth-card">
+      <div class="auth-card-header">
+        <div class="auth-logo">
+          <span>AF</span>
+        </div>
+        <h1 class="auth-title">Welcome back</h1>
+        <p class="auth-subtitle">Sign in to AssetFlow ERP</p>
       </div>
-      <div class="panel-title">Track every asset.<br>From register<br>to <span style="color:var(--teal)">retirement.</span></div>
-      <p style="color:rgba(255,255,255,0.55);font-size:15px;max-width:360px;margin-bottom:36px;">
-        A centralized ERP platform for organizations to manage physical assets, bookings, maintenance, and audits — without spreadsheets.
-      </p>
-      <ul class="feature-list">
-        <li><span class="feature-icon">🏷️</span> Auto-tagged assets with unique AF-XXXX IDs and full history</li>
-        <li><span class="feature-icon">📅</span> Time-slot booking with overlap protection</li>
-        <li><span class="feature-icon">🔧</span> Maintenance approval workflow</li>
-        <li><span class="feature-icon">🔍</span> Structured audit cycles with discrepancy reports</li>
-      </ul>
+
+      <div class="auth-body">
+        <div id="error-banner" style="display:none;background:var(--color-danger-light);color:#991b1b;padding:12px 16px;border-radius:var(--radius-md);margin-bottom:16px;font-size:0.875rem;border-left:4px solid var(--color-danger);">
+        </div>
+
+        <form id="login-form" novalidate>
+          <div class="form-group">
+            <label for="email">Email Address <span class="required">*</span></label>
+            <input type="email" id="email" name="email" class="form-control"
+              placeholder="you@company.com" autocomplete="email" required>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password <span class="required">*</span></label>
+            <div style="position:relative">
+              <input type="password" id="password" name="password" class="form-control"
+                placeholder="Enter your password" autocomplete="current-password" required>
+              <button type="button" id="toggle-password"
+                style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--color-text-muted);cursor:pointer;font-size:0.875rem;">
+                👁
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px;" id="login-btn">
+            Sign In
+          </button>
+        </form>
+      </div>
+
+      <div class="auth-footer">
+        Don't have an account?
+        <a href="register.html" class="auth-link">Create account</a>
+      </div>
     </div>
   </div>
 
-  <!-- Auth Panel -->
-  <div class="auth-panel">
-    <div class="auth-logo">
-      <div class="logo-mark" style="gap:8px;">
-        <div class="logo-icon">📦</div>
-        <span class="logo-text">Asset<span>Flow</span></span>
-      </div>
-    </div>
+  <script type="module">
+    import { authApi } from './assets/js/core/api.js';
+    import { Toast } from './assets/js/core/app.js';
 
-    <!-- Login Form -->
-    <div id="login-section">
-      <div class="auth-heading">Welcome back</div>
-      <div class="auth-sub">Sign in to your AssetFlow account</div>
+    // Redirect if already logged in
+    if (localStorage.getItem('access_token')) {
+      window.location.href = './pages/dashboard.html';
+    }
 
-      <form class="auth-form" id="login-form">
-        <div class="form-group">
-          <label class="form-label">Email Address</label>
-          <input type="email" id="login-email" class="form-control" placeholder="you@company.com" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Password</label>
-          <div class="pass-wrap">
-            <input type="password" id="login-password" class="form-control" placeholder="••••••••" required>
-            <button type="button" class="pass-toggle" onclick="togglePass('login-password',this)">👁</button>
-          </div>
-        </div>
-        <div style="text-align:right;margin-top:-6px;">
-          <a href="#" class="auth-link text-sm" onclick="showSection('forgot')">Forgot password?</a>
-        </div>
-        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;">
-          Sign In
-        </button>
-      </form>
+    const form = document.getElementById('login-form');
+    const loginBtn = document.getElementById('login-btn');
+    const errorBanner = document.getElementById('error-banner');
 
+<<<<<<< HEAD
       <div class="divider" style="margin-top:20px;">or</div>
       <div class="auth-switch">
         Don't have an account? <a href="#" class="auth-link" onclick="showSection('signup')">Create one</a>
@@ -148,15 +182,19 @@
   function showSection(s) {
     ['login','signup','forgot'].forEach(x => {
       document.getElementById(x+'-section').style.display = x===s ? 'block' : 'none';
+=======
+    // Toggle password visibility
+    document.getElementById('toggle-password').addEventListener('click', () => {
+      const input = document.getElementById('password');
+      input.type = input.type === 'password' ? 'text' : 'password';
+>>>>>>> be5a77a (final)
     });
-  }
 
-  function togglePass(id, btn) {
-    const el = document.getElementById(id);
-    el.type = el.type === 'password' ? 'text' : 'password';
-    btn.textContent = el.type === 'password' ? '👁' : '🙈';
-  }
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBanner.style.display = 'none';
 
+<<<<<<< HEAD
   // Login
   document.getElementById('login-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -180,51 +218,32 @@
       btn.disabled = false; btn.textContent = 'Sign In';
     }
   });
+=======
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+>>>>>>> be5a77a (final)
 
-  // Signup
-  document.getElementById('signup-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const btn = e.target.querySelector('button[type=submit]');
-    btn.disabled = true; btn.textContent = 'Creating…';
-    const errEl = document.getElementById('signup-error');
-    errEl.style.display = 'none';
-    try {
-      await apiFetch('/api/auth/signup', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: document.getElementById('signup-name').value,
-          email: document.getElementById('signup-email').value,
-          password: document.getElementById('signup-password').value,
-        })
-      });
-      toast('Account created! Please sign in.');
-      showSection('login');
-    } catch (err) {
-      errEl.innerHTML = `<div class="alert alert-error">⚠ ${err.message}</div>`;
-      errEl.style.display = 'block';
-    } finally {
-      btn.disabled = false; btn.textContent = 'Create Account';
-    }
-  });
+      if (!email || !password) {
+        errorBanner.textContent = 'Please enter your email and password';
+        errorBanner.style.display = 'block';
+        return;
+      }
 
-  // Forgot
-  document.getElementById('forgot-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const btn = e.target.querySelector('button[type=submit]');
-    btn.disabled = true;
-    try {
-      const data = await apiFetch('/api/auth/forgot-password', {
-        method: 'POST',
-        body: JSON.stringify({ email: document.getElementById('forgot-email').value })
-      });
-      document.getElementById('forgot-result').innerHTML =
-        `<div class="alert alert-success">✓ ${data.message}${data.reset_token ? ' Token: <strong>'+data.reset_token+'</strong>' : ''}</div>`;
-    } catch (err) {
-      document.getElementById('forgot-result').innerHTML = `<div class="alert alert-error">⚠ ${err.message}</div>`;
-    } finally {
-      btn.disabled = false;
-    }
-  });
-</script>
+      loginBtn.disabled = true;
+      loginBtn.innerHTML = '<span class="spinner"></span> Signing in...';
+
+      try {
+        const result = await authApi.login({ email, password });
+        localStorage.setItem('access_token', result.data.access_token);
+        localStorage.setItem('refresh_token', result.data.refresh_token);
+        window.location.href = './pages/dashboard.html';
+      } catch (err) {
+        errorBanner.textContent = err.message || 'Invalid email or password';
+        errorBanner.style.display = 'block';
+        loginBtn.disabled = false;
+        loginBtn.innerHTML = 'Sign In';
+      }
+    });
+  </script>
 </body>
 </html>

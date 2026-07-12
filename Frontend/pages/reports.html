@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reports — AssetFlow</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+</head>
+<body>
+  <div class="app-layout">
+    <main class="main-content" id="main-content">
+      <div class="page-container">
+        
+        <div class="page-header">
+          <div class="page-title">
+            <h1>Reports Engine</h1>
+            <p>Generate CSV and PDF reports on asset utilization, depreciation, and more.</p>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          
+          <!-- Inventory Report -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Inventory Report</h2>
+            </div>
+            <div class="card-body">
+              <p class="text-muted mb-4">Complete list of all physical assets with current status and basic details.</p>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Department</label>
+                  <select id="inv-dept" class="form-control"><option value="">All</option></select>
+                </div>
+                <div class="form-group">
+                  <label>Category</label>
+                  <select id="inv-cat" class="form-control"><option value="">All</option></select>
+                </div>
+              </div>
+              <button class="btn btn-primary" onclick="generateReport('inventory', 'csv')">Export CSV</button>
+            </div>
+          </div>
+
+          <!-- Depreciation Report -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Depreciation Report</h2>
+            </div>
+            <div class="card-body">
+              <p class="text-muted mb-4">Financial report detailing asset purchase costs vs current depreciated values.</p>
+              <button class="btn btn-primary" onclick="generateReport('depreciation', 'csv')">Export CSV</button>
+            </div>
+          </div>
+          
+          <!-- Utilization Report -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Utilization Report</h2>
+            </div>
+            <div class="card-body">
+              <p class="text-muted mb-4">Metrics on asset allocations, bookings, and idle times.</p>
+              <button class="btn btn-primary" onclick="generateReport('utilization', 'csv')">Export CSV</button>
+            </div>
+          </div>
+
+          <!-- Audit Discrepancy Report -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Audit Discrepancies</h2>
+            </div>
+            <div class="card-body">
+              <p class="text-muted mb-4">List of all discrepancies flagged during recent physical audits (missing, damaged, etc).</p>
+              <button class="btn btn-primary" onclick="generateReport('discrepancies', 'csv')">Export CSV</button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { App, Toast } from '../assets/js/core/app.js';
+    import { reportsApi, departmentsApi, categoriesApi } from '../assets/js/core/api.js';
+    import { renderLayout } from '../assets/js/components/layout.js';
+
+    window.generateReport = generateReport;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      renderLayout('reports');
+      await App.init();
+      loadFilters();
+    });
+
+    async function loadFilters() {
+      try {
+        const [depts, cats] = await Promise.all([
+          departmentsApi.list({ per_page: 100 }),
+          categoriesApi.list({ per_page: 100 })
+        ]);
+        
+        const deptSel = document.getElementById('inv-dept');
+        depts.data.items.forEach(d => deptSel.add(new Option(d.name, d.id)));
+        
+        const catSel = document.getElementById('inv-cat');
+        cats.data.items.forEach(c => catSel.add(new Option(c.name, c.id)));
+      } catch (err) {}
+    }
+
+    async function generateReport(type, format) {
+      try {
+        let params = { format };
+        if (type === 'inventory') {
+          const dept = document.getElementById('inv-dept').value;
+          const cat = document.getElementById('inv-cat').value;
+          if (dept) params.department_id = dept;
+          if (cat) params.category_id = cat;
+        }
+
+        Toast.info('Generating...', 'Your report is being generated.');
+        
+        // In a real app, this would trigger a download.
+        // For fetch API, we might need to handle blob.
+        // We will just call the api layer which returns blob.
+        
+        const blob = await reportsApi.generate(type, params);
+        
+        // Create link and download
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `assetflow_${type}_report_${new Date().toISOString().split('T')[0]}.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        
+        Toast.success('Success', 'Report downloaded successfully.');
+      } catch (err) {
+        Toast.error('Error', err.message || 'Failed to generate report');
+      }
+    }
+  </script>
+</body>
+</html>

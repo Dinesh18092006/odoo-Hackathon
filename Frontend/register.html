@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AssetFlow — Create Account</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="assets/css/main.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <style>
+    .auth-page { background: linear-gradient(135deg, #0f172a 0%, #1a2f6e 40%, #1e40af 100%); }
+    .auth-bg-shapes { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+    .auth-shape { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.04); animation: float 10s infinite ease-in-out; }
+    .auth-shape:nth-child(1) { width: 400px; height: 400px; top: -100px; right: -100px; animation-delay: 0s; }
+    .auth-shape:nth-child(2) { width: 250px; height: 250px; bottom: 50px; left: -80px; animation-delay: 3s; }
+    .auth-shape:nth-child(3) { width: 150px; height: 150px; top: 40%; right: 15%; animation-delay: 6s; }
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+  </style>
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-bg-shapes">
+      <div class="auth-shape"></div>
+      <div class="auth-shape"></div>
+      <div class="auth-shape"></div>
+    </div>
+
+    <div class="auth-card" style="max-width: 520px;">
+      <div class="auth-card-header">
+        <div class="auth-logo"><span>AF</span></div>
+        <h1 class="auth-title">Create an Account</h1>
+        <p class="auth-subtitle">Join AssetFlow as an Employee</p>
+      </div>
+
+      <div class="auth-body">
+        <div id="error-banner" style="display:none;background:var(--color-danger-light);color:#991b1b;padding:12px 16px;border-radius:var(--radius-md);margin-bottom:16px;font-size:0.875rem;border-left:4px solid var(--color-danger);">
+        </div>
+
+        <form id="register-form" novalidate>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="first_name">First Name <span class="required">*</span></label>
+              <input type="text" id="first_name" name="first_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label for="last_name">Last Name <span class="required">*</span></label>
+              <input type="text" id="last_name" name="last_name" class="form-control" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="email">Email Address <span class="required">*</span></label>
+            <input type="email" id="email" name="email" class="form-control" required>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password <span class="required">*</span></label>
+            <input type="password" id="password" name="password" class="form-control" required>
+            <div class="form-hint">At least 8 characters.</div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px;" id="register-btn">
+            Create Account
+          </button>
+        </form>
+      </div>
+
+      <div class="auth-footer">
+        Already have an account? <a href="index.html" class="auth-link">Sign in here</a>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { authApi } from './assets/js/core/api.js';
+
+    if (localStorage.getItem('access_token')) window.location.href = './pages/dashboard.html';
+
+    const form = document.getElementById('register-form');
+    const registerBtn = document.getElementById('register-btn');
+    const errorBanner = document.getElementById('error-banner');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBanner.style.display = 'none';
+
+      const first_name = document.getElementById('first_name').value.trim();
+      const last_name = document.getElementById('last_name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!first_name || !last_name || !email || !password) {
+        errorBanner.textContent = 'Please fill in all required fields.';
+        errorBanner.style.display = 'block';
+        return;
+      }
+      
+      if (password.length < 8) {
+        errorBanner.textContent = 'Password must be at least 8 characters long.';
+        errorBanner.style.display = 'block';
+        return;
+      }
+
+      registerBtn.disabled = true;
+      registerBtn.innerHTML = '<span class="spinner"></span> Creating account...';
+
+      try {
+        const payload = { 
+          full_name: `${first_name} ${last_name}`, 
+          email, 
+          password
+        };
+        const result = await authApi.register(payload);
+        
+        // Auto-login after registration
+        const loginResult = await authApi.login({ email, password });
+        localStorage.setItem('access_token', loginResult.data.access_token);
+        localStorage.setItem('refresh_token', loginResult.data.refresh_token);
+        window.location.href = './pages/dashboard.html';
+      } catch (err) {
+        errorBanner.textContent = err.message || 'Registration failed. Email might be in use.';
+        errorBanner.style.display = 'block';
+        registerBtn.disabled = false;
+        registerBtn.innerHTML = 'Create Account';
+      }
+    });
+  </script>
+</body>
+</html>

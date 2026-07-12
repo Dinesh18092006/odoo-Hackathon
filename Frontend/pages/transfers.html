@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transfers — AssetFlow</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+</head>
+<body>
+  <div class="app-layout">
+    <main class="main-content" id="main-content">
+      <div class="page-container">
+        
+        <div class="page-header">
+          <div class="page-title">
+            <h1>Asset Transfers</h1>
+            <p>Manage transfers between departments and users.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" onclick="Modal.open('transfer-modal')">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+              Initiate Transfer
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Asset</th>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th style="width: 120px">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="table-body">
+                <!-- Filled via JS -->
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <div class="pagination-info" id="page-info">Loading...</div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Transfer Modal -->
+  <div class="modal-overlay" id="transfer-modal" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Initiate Transfer</h3>
+        <button class="modal-close" onclick="Modal.close('transfer-modal')">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="transfer-form">
+          <div class="form-group">
+            <label for="asset_id">Select Asset <span class="required">*</span></label>
+            <select id="asset_id" name="asset_id" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label for="to_department_id">To Department <span class="required">*</span></label>
+            <select id="to_department_id" name="to_department_id" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label for="to_user_id">To User (Optional)</label>
+            <select id="to_user_id" name="to_user_id" class="form-control">
+              <option value="">None</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="reason">Reason for Transfer</label>
+            <textarea id="reason" name="reason" class="form-control" rows="2"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="Modal.close('transfer-modal')">Cancel</button>
+        <button class="btn btn-primary" id="save-transfer-btn">Submit Request</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { App, fmt, badge, renderSkeletonRows, Toast, Modal, getFormData } from '../assets/js/core/app.js';
+    import { transfersApi, assetsApi, departmentsApi, usersApi } from '../assets/js/core/api.js';
+    import { renderLayout } from '../assets/js/components/layout.js';
+
+    window.Modal = Modal;
+    window.handleAction = handleAction;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      renderLayout('transfers');
+      await App.init();
+      
+      document.getElementById('save-transfer-btn').addEventListener('click', handleSubmit);
+
+      loadOptions();
+      loadTransfers();
+    });
+
+    async function loadOptions() {
+      try {
+        const [assets, depts, users] = await Promise.all([
+          assetsApi.list({ per_page: 100 }), // We should only list allocated assets, but this works for demo
+          departmentsApi.list({ per_page: 100 }),
+          usersApi.list({ per_page: 100 })
+        ]);
+        
+        const assetSel = document.getElementById('asset_id');
+        assets.data.items.forEach(a => assetSel.add(new Option(`${a.name} [${a.asset_tag}]`, a.id)));
+        
+        const deptSel = document.getElementById('to_department_id');
+        depts.data.items.forEach(d => deptSel.add(new Option(d.name, d.id)));
+
+        const userSel = document.getElementById('to_user_id');
+        users.data.items.forEach(u => userSel.add(new Option(`${u.first_name} ${u.last_name}`, u.id)));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function loadTransfers() {
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = renderSkeletonRows(6, 6);
+      
+      try {
+        const res = await transfersApi.list({ per_page: 50 });
+        const items = res.data.items;
+        
+        if (items.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No transfers found.</div></td></tr>`;
+        } else {
+          tbody.innerHTML = items.map(item => `
+            <tr>
+              <td class="font-medium">${item.asset?.name || 'Unknown'}</td>
+              <td>
+                <div>Dept: ${item.from_department?.name || '—'}</div>
+                <div class="text-xs text-muted">User: ${item.from_user?.first_name || '—'}</div>
+              </td>
+              <td>
+                <div>Dept: ${item.to_department?.name || '—'}</div>
+                <div class="text-xs text-muted">User: ${item.to_user?.first_name || '—'}</div>
+              </td>
+              <td>${badge(item.status)}</td>
+              <td>${fmt.date(item.created_at)}</td>
+              <td class="td-actions">
+                ${renderActions(item)}
+              </td>
+            </tr>
+          `).join('');
+        }
+        document.getElementById('page-info').textContent = `Showing ${items.length} transfers`;
+      } catch (err) {
+        Toast.error('Error', 'Failed to load transfers');
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color:red">Failed to load data</td></tr>`;
+      }
+    }
+
+    function renderActions(item) {
+      const isManager = ['admin', 'asset_manager'].includes(App.user.role);
+      let html = '';
+
+      if (item.status === 'pending' && isManager) {
+        html += `<button class="btn-icon btn-sm" style="color:var(--color-success)" onclick="handleAction('${item.id}', 'approve')" title="Approve">✓</button>`;
+        html += `<button class="btn-icon btn-sm" style="color:var(--color-danger)" onclick="handleAction('${item.id}', 'reject')" title="Reject">✕</button>`;
+      }
+      
+      if (item.status === 'approved' && isManager) {
+         html += `<button class="btn btn-secondary btn-sm" onclick="handleAction('${item.id}', 'complete')">Complete</button>`;
+      }
+
+      return html || '—';
+    }
+
+    async function handleAction(id, action) {
+      try {
+        if (action === 'approve') await transfersApi.approve(id);
+        if (action === 'reject') await transfersApi.reject(id);
+        if (action === 'complete') await transfersApi.complete(id);
+        
+        Toast.success('Success', `Transfer ${action}ed`);
+        loadTransfers();
+      } catch (err) {
+        Toast.error('Error', err.message);
+      }
+    }
+
+    async function handleSubmit() {
+      const data = getFormData('transfer-form');
+      if (!data.to_user_id) delete data.to_user_id;
+
+      const btn = document.getElementById('save-transfer-btn');
+      btn.disabled = true;
+      btn.innerHTML = 'Submitting...';
+      
+      try {
+        await transfersApi.request(data);
+        Toast.success('Success', 'Transfer request submitted');
+        Modal.close('transfer-modal');
+        document.getElementById('transfer-form').reset();
+        loadTransfers();
+      } catch (err) {
+        Toast.error('Error', err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Submit Request';
+      }
+    }
+  </script>
+</body>
+</html>
