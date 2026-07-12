@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resource Booking — AssetFlow</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="toast-container"></div>
+<div class="app-shell">
+  <div id="sidebar-mount"></div>
+  <div class="main-content">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="hamburger" id="hamburger">☰</button>
+        <span class="topbar-title">📅 Resource Booking</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary btn-sm" id="btn-new-booking">➕ Book Resource</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <!-- Filters -->
+      <div class="filter-row">
+        <div class="search-bar">
+          <span>🔍</span>
+          <input type="text" id="search-input" placeholder="Search asset or employee…">
+        </div>
+        <select class="form-select" style="width:160px;" id="filter-status">
+          <option value="">All Statuses</option>
+          <option>Upcoming</option>
+          <option>Ongoing</option>
+          <option>Completed</option>
+          <option>Cancelled</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="loadBookings()">Apply</button>
+      </div>
+
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div id="booking-table-wrap">
+          <div style="display:flex;justify-content:center;padding:48px;"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New Booking Modal -->
+<div class="modal-overlay" id="modal-booking">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Book a Resource</div>
+      <button class="modal-close" onclick="closeModal('modal-booking')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group form-full">
+          <label class="form-label">Bookable Asset *</label>
+          <select id="booking-asset" class="form-select"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Start Time *</label>
+          <input type="datetime-local" id="booking-start" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">End Time *</label>
+          <input type="datetime-local" id="booking-end" class="form-control">
+        </div>
+        <div class="form-group form-full">
+          <label class="form-label">Purpose</label>
+          <input type="text" id="booking-purpose" class="form-control" placeholder="Purpose of booking">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-booking')">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-booking">Confirm Booking</button>
+    </div>
+  </div>
+</div>
+
+<script src="core.js"></script>
+<script src="sidebar.js"></script>
+<script>
+if (!requireAuth()) throw new Error();
+injectSidebar(); initSidebar();
+
+async function loadBookings() {
+  const search = document.getElementById('search-input').value;
+  const status = document.getElementById('filter-status').value;
+  let url = '/api/bookings/?';
+  if (search) url += `search=${encodeURIComponent(search)}&`;
+  if (status) url += `status=${status}&`;
+
+  const wrap = document.getElementById('booking-table-wrap');
+  wrap.innerHTML = '<div style="display:flex;justify-content:center;padding:48px;"><div class="spinner"></div></div>';
+  try {
+    const data = await apiFetch(url);
+    if (!data.length) {
+      wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><p>No bookings found. Create one to get started.</p></div>';
+      return;
+    }
+    wrap.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr>
+        <th>Asset</th><th>Booked By</th><th>Start</th><th>End</th><th>Purpose</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${data.map(b => `
+          <tr>
+            <td><strong style="color:var(--teal);font-family:'Sora',sans-serif;">${b.asset_tag}</strong><br><span class="text-muted text-sm">${b.asset_name}</span></td>
+            <td>${b.booked_by_name || '—'}</td>
+            <td>${fmtDateTime(b.start_time)}</td>
+            <td>${fmtDateTime(b.end_time)}</td>
+            <td>${b.purpose || '<span class="text-muted">—</span>'}</td>
+            <td>${statusBadge(b.status)}</td>
+            <td>
+              ${b.status === 'Upcoming' ? `<button class="btn btn-ghost btn-xs" onclick="cancelBooking(${b.id})">✕ Cancel</button>` : ''}
+            </td>
+          </tr>`).join('')}
+      </tbody></table></div>`;
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function cancelBooking(id) {
+  if (!confirm('Cancel this booking?')) return;
+  try {
+    await apiFetch(`/api/bookings/${id}/cancel`, { method: 'POST' });
+    toast('Booking cancelled');
+    loadBookings();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+document.getElementById('btn-new-booking').addEventListener('click', async () => {
+  await populateSelect(document.getElementById('booking-asset'), '/api/assets/?is_bookable=true', 'id', 'name', 'Select Bookable Asset');
+  openModal('modal-booking');
+});
+
+document.getElementById('btn-save-booking').addEventListener('click', async () => {
+  const body = {
+    asset_id: parseInt(document.getElementById('booking-asset').value),
+    start_time: document.getElementById('booking-start').value,
+    end_time: document.getElementById('booking-end').value,
+    purpose: document.getElementById('booking-purpose').value.trim() || null,
+  };
+  if (!body.asset_id || !body.start_time || !body.end_time) { toast('Asset, start and end time are required', 'error'); return; }
+  try {
+    await apiFetch('/api/bookings/', { method: 'POST', body: JSON.stringify(body) });
+    toast('Booking created successfully');
+    closeModal('modal-booking');
+    loadBookings();
+  } catch(e) { toast(e.message, 'error'); }
+});
+
+document.getElementById('search-input').addEventListener('input', () => {
+  clearTimeout(window._st);
+  window._st = setTimeout(loadBookings, 350);
+});
+
+loadBookings();
+</script>
+</body>
+</html>

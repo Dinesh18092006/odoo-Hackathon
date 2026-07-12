@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reports — AssetFlow</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="toast-container"></div>
+<div class="app-shell">
+  <div id="sidebar-mount"></div>
+  <div class="main-content">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="hamburger" id="hamburger">☰</button>
+        <span class="topbar-title">📈 Reports</span>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;">
+
+        <!-- Asset Summary -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">📦 Asset Summary</div></div>
+          <div id="report-assets"><div style="display:flex;justify-content:center;padding:24px;"><div class="spinner"></div></div></div>
+        </div>
+
+        <!-- Allocation Summary -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">🔄 Allocation Overview</div></div>
+          <div id="report-allocs"><div style="display:flex;justify-content:center;padding:24px;"><div class="spinner"></div></div></div>
+        </div>
+
+        <!-- Maintenance Summary -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">🔧 Maintenance Overview</div></div>
+          <div id="report-maint"><div style="display:flex;justify-content:center;padding:24px;"><div class="spinner"></div></div></div>
+        </div>
+
+        <!-- Booking Summary -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">📅 Booking Overview</div></div>
+          <div id="report-bookings"><div style="display:flex;justify-content:center;padding:24px;"><div class="spinner"></div></div></div>
+        </div>
+
+        <!-- Assets by Category -->
+        <div class="card" style="grid-column:1/-1;">
+          <div class="card-header"><div class="card-title">🏷️ Assets by Category</div></div>
+          <div id="report-by-cat"><div style="display:flex;justify-content:center;padding:24px;"><div class="spinner"></div></div></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="core.js"></script>
+<script src="sidebar.js"></script>
+<script>
+if (!requireAuth()) throw new Error();
+injectSidebar(); initSidebar();
+
+function statRow(label, value, color) {
+  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+    <span style="color:var(--text-muted);font-size:14px;">${label}</span>
+    <span style="font-weight:700;font-size:18px;color:${color||'var(--text-primary)'};">${value}</span>
+  </div>`;
+}
+
+function barRow(label, value, max, color) {
+  const pct = max > 0 ? Math.round(value / max * 100) : 0;
+  return `<div style="margin-bottom:14px;">
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+      <span style="color:var(--text-muted);">${label}</span>
+      <span style="font-weight:700;">${value}</span>
+    </div>
+    <div style="background:var(--surface);border-radius:4px;height:14px;overflow:hidden;">
+      <div style="width:${pct}%;height:100%;background:${color};border-radius:4px;transition:width .5s;"></div>
+    </div>
+  </div>`;
+}
+
+async function loadReports() {
+  try {
+    const kpi = await apiFetch('/api/dashboard/kpis');
+
+    // Asset summary
+    const assetTotal = Object.values(kpi.assets).reduce((a,b)=>a+b,0);
+    document.getElementById('report-assets').innerHTML =
+      statRow('Total Assets', assetTotal) +
+      statRow('Available', kpi.assets.available, '#27AE60') +
+      statRow('Allocated', kpi.assets.allocated, '#2E86C1') +
+      statRow('Under Maintenance', kpi.assets.under_maintenance, '#F39C12') +
+      statRow('Retired / Disposed', (kpi.assets.retired||0)+(kpi.assets.disposed||0), '#95A5A6');
+
+    // Allocation overview
+    document.getElementById('report-allocs').innerHTML =
+      statRow('Active Allocations', kpi.assets.allocated, '#2E86C1') +
+      statRow('Overdue Returns', kpi.overdue_returns, '#E74C3C') +
+      statRow('Upcoming Returns (7d)', kpi.upcoming_returns, '#F39C12') +
+      statRow('Pending Transfers', kpi.pending_transfers, '#8E44AD');
+
+    // Maintenance
+    document.getElementById('report-maint').innerHTML =
+      statRow('Active Requests', kpi.maintenance_active, '#F39C12');
+
+    // Bookings
+    document.getElementById('report-bookings').innerHTML =
+      statRow('Active Bookings', kpi.active_bookings, '#2E86C1');
+
+    // By category
+    try {
+      const cats = await apiFetch('/api/assets/summary/by-category');
+      const max = Math.max(...cats.map(c => c.count), 1);
+      const colors = ['#27AE60','#2E86C1','#8E44AD','#F39C12','#E74C3C','#1ABC9C','#3498DB'];
+      document.getElementById('report-by-cat').innerHTML = cats.length
+        ? cats.map((c,i) => barRow(c.category_name, c.count, max, colors[i % colors.length])).join('')
+        : '<p class="text-muted">No category data.</p>';
+    } catch {
+      document.getElementById('report-by-cat').innerHTML = '<p class="text-muted text-sm">Category breakdown not available.</p>';
+    }
+  } catch(e) { toast(e.message,'error'); }
+}
+
+loadReports();
+</script>
+</body>
+</html>

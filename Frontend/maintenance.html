@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maintenance — AssetFlow</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="toast-container"></div>
+<div class="app-shell">
+  <div id="sidebar-mount"></div>
+  <div class="main-content">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="hamburger" id="hamburger">☰</button>
+        <span class="topbar-title">🔧 Maintenance</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary btn-sm" id="btn-new-request">➕ Request Maintenance</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <!-- Tabs -->
+      <div id="maint-tabs" style="margin-bottom:20px;">
+        <div style="display:flex;gap:8px;border-bottom:1px solid var(--border);padding-bottom:0;">
+          <button class="tab-btn active" data-tab="tab-all" style="padding:8px 16px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-muted);cursor:pointer;font-weight:600;" onclick="switchTab(this,'tab-all')">All Requests</button>
+          <button class="tab-btn" data-tab="tab-pending" style="padding:8px 16px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-muted);cursor:pointer;font-weight:600;" onclick="switchTab(this,'tab-pending')">Pending</button>
+          <button class="tab-btn" data-tab="tab-active" style="padding:8px 16px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-muted);cursor:pointer;font-weight:600;" onclick="switchTab(this,'tab-active')">In Progress</button>
+          <button class="tab-btn" data-tab="tab-resolved" style="padding:8px 16px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-muted);cursor:pointer;font-weight:600;" onclick="switchTab(this,'tab-resolved')">Resolved</button>
+        </div>
+      </div>
+
+      <div class="filter-row">
+        <div class="search-bar">
+          <span>🔍</span>
+          <input type="text" id="search-input" placeholder="Search asset or description…">
+        </div>
+        <select class="form-select" style="width:140px;" id="filter-priority">
+          <option value="">All Priorities</option>
+          <option>Low</option><option>Medium</option><option>High</option><option>Critical</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="loadMaintenance()">Apply</button>
+      </div>
+
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div id="maint-table-wrap">
+          <div style="display:flex;justify-content:center;padding:48px;"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New Maintenance Request Modal -->
+<div class="modal-overlay" id="modal-maint">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Request Maintenance</div>
+      <button class="modal-close" onclick="closeModal('modal-maint')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group form-full">
+          <label class="form-label">Asset *</label>
+          <select id="maint-asset" class="form-select"></select>
+        </div>
+        <div class="form-group form-full">
+          <label class="form-label">Description *</label>
+          <input type="text" id="maint-desc" class="form-control" placeholder="Describe the issue…">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Priority</label>
+          <select id="maint-priority" class="form-select">
+            <option>Low</option><option selected>Medium</option><option>High</option><option>Critical</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Scheduled Date</label>
+          <input type="date" id="maint-date" class="form-control">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-maint')">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-maint">Submit Request</button>
+    </div>
+  </div>
+</div>
+
+<script src="core.js"></script>
+<script src="sidebar.js"></script>
+<script>
+if (!requireAuth()) throw new Error();
+injectSidebar(); initSidebar();
+
+let currentTab = '';
+
+function switchTab(btn, tabId) {
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.style.borderBottomColor = 'transparent';
+    b.style.color = 'var(--text-muted)';
+  });
+  btn.style.borderBottomColor = 'var(--teal)';
+  btn.style.color = 'var(--teal)';
+  const map = { 'tab-all': '', 'tab-pending': 'Pending', 'tab-active': 'InProgress', 'tab-resolved': 'Resolved' };
+  currentTab = map[tabId] || '';
+  loadMaintenance();
+}
+
+// Activate first tab on load
+document.querySelector('.tab-btn').style.borderBottomColor = 'var(--teal)';
+document.querySelector('.tab-btn').style.color = 'var(--teal)';
+
+async function loadMaintenance() {
+  const search = document.getElementById('search-input').value;
+  const priority = document.getElementById('filter-priority').value;
+  let url = '/api/maintenance/?';
+  if (currentTab) url += `status=${currentTab}&`;
+  if (search) url += `search=${encodeURIComponent(search)}&`;
+  if (priority) url += `priority=${priority}&`;
+
+  const wrap = document.getElementById('maint-table-wrap');
+  wrap.innerHTML = '<div style="display:flex;justify-content:center;padding:48px;"><div class="spinner"></div></div>';
+  try {
+    const data = await apiFetch(url);
+    const user = Auth.getUser();
+    const isManager = ['Admin','AssetManager'].includes(user.role);
+    if (!data.length) {
+      wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">🔧</div><p>No maintenance requests found.</p></div>';
+      return;
+    }
+    wrap.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr>
+        <th>Asset</th><th>Description</th><th>Priority</th><th>Status</th>
+        <th>Raised By</th><th>Date</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${data.map(m => `
+          <tr>
+            <td><strong style="color:var(--teal);">${m.asset_tag}</strong><br><span class="text-muted text-sm">${m.asset_name}</span></td>
+            <td>${m.description}</td>
+            <td>${statusBadge(m.priority)}</td>
+            <td>${statusBadge(m.status)}</td>
+            <td>${m.raised_by_name || '—'}</td>
+            <td>${fmtDate(m.created_at)}</td>
+            <td style="white-space:nowrap;">
+              ${isManager && m.status === 'Pending' ? `<button class="btn btn-ghost btn-xs" onclick="updateStatus(${m.id},'Approved')">✅ Approve</button> <button class="btn btn-ghost btn-xs" onclick="updateStatus(${m.id},'Rejected')">✕</button>` : ''}
+              ${isManager && m.status === 'Approved' ? `<button class="btn btn-ghost btn-xs" onclick="updateStatus(${m.id},'InProgress')">▶ Start</button>` : ''}
+              ${isManager && m.status === 'InProgress' ? `<button class="btn btn-ghost btn-xs" onclick="updateStatus(${m.id},'Resolved')">✔ Resolve</button>` : ''}
+            </td>
+          </tr>`).join('')}
+      </tbody></table></div>`;
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function updateStatus(id, status) {
+  try {
+    await apiFetch(`/api/maintenance/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+    toast(`Status updated to ${status}`);
+    loadMaintenance();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+document.getElementById('btn-new-request').addEventListener('click', async () => {
+  await populateSelect(document.getElementById('maint-asset'), '/api/assets/', 'id', 'name', 'Select Asset');
+  openModal('modal-maint');
+});
+
+document.getElementById('btn-save-maint').addEventListener('click', async () => {
+  const body = {
+    asset_id: parseInt(document.getElementById('maint-asset').value),
+    description: document.getElementById('maint-desc').value.trim(),
+    priority: document.getElementById('maint-priority').value,
+    scheduled_date: document.getElementById('maint-date').value || null,
+  };
+  if (!body.asset_id || !body.description) { toast('Asset and description are required', 'error'); return; }
+  try {
+    await apiFetch('/api/maintenance/', { method: 'POST', body: JSON.stringify(body) });
+    toast('Maintenance request submitted');
+    closeModal('modal-maint');
+    loadMaintenance();
+  } catch(e) { toast(e.message, 'error'); }
+});
+
+document.getElementById('search-input').addEventListener('input', () => {
+  clearTimeout(window._st);
+  window._st = setTimeout(loadMaintenance, 350);
+});
+
+loadMaintenance();
+</script>
+</body>
+</html>

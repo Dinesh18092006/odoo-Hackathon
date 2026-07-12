@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Allocations — AssetFlow</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div id="toast-container"></div>
+  <div class="app-shell">
+    <div id="sidebar-mount"></div>
+    <div class="main-content">
+      <div class="topbar">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button class="hamburger" id="hamburger">☰</button>
+          <span class="topbar-title">🔄 Allocations</span>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn btn-primary btn-sm" id="btn-allocate" data-role="Admin,AssetManager">➕ New
+            Allocation</button>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <!-- Filters -->
+        <div class="filter-row">
+          <div class="search-bar">
+            <span>🔍</span>
+            <input type="text" id="search-input" placeholder="Search asset tag, employee…">
+          </div>
+          <select class="form-select" style="width:160px;" id="filter-status">
+            <option value="">All Statuses</option>
+            <option>Active</option>
+            <option>Returned</option>
+            <option>Not Returned</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" onclick="loadAllocations()">Apply</button>
+        </div>
+
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div id="alloc-table-wrap">
+            <div style="display:flex;justify-content:center;padding:48px;">
+              <div class="spinner"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Allocate Modal -->
+  <div class="modal-overlay" id="modal-allocate">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">New Allocation</div>
+        <button class="modal-close" onclick="closeModal('modal-allocate')">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group form-full">
+            <label class="form-label">Asset *</label>
+            <select id="alloc-asset" class="form-select"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Allocate To (Employee)</label>
+            <select id="alloc-employee" class="form-select"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Or Department</label>
+            <select id="alloc-dept" class="form-select"></select>
+          </div>
+          <div class="form-group form-full">
+            <label class="form-label">Expected Return Date</label>
+            <input type="date" id="alloc-return-date" class="form-control">
+          </div>
+          <div class="form-group form-full">
+            <label class="form-label">Notes</label>
+            <input type="text" id="alloc-notes" class="form-control" placeholder="Optional notes">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-allocate')">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-alloc">Allocate</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="core.js"></script>
+  <script src="sidebar.js"></script>
+  <script>
+    if (!requireAuth()) throw new Error();
+    injectSidebar(); initSidebar();
+
+    async function loadAllocations() {
+      const search = document.getElementById('search-input').value;
+      const status = document.getElementById('filter-status').value;
+      let url = '/api/allocations/?';
+      if (search) url += `search=${encodeURIComponent(search)}&`;
+      if (status) url += `status=${status}&`;
+
+      const wrap = document.getElementById('alloc-table-wrap');
+      wrap.innerHTML = '<div style="display:flex;justify-content:center;padding:48px;"><div class="spinner"></div></div>';
+      try {
+        const data = await apiFetch(url);
+        if (!data.length) {
+          wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No allocations found.</p></div>';
+          return;
+        }
+        wrap.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr>
+        <th>Asset Tag</th><th>Asset Name</th><th>Allocated To</th>
+        <th>Department</th><th>Allocated By</th><th>From</th><th>Expected Return</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${data.map(a => `
+          <tr>
+            <td><strong style="color:var(--teal);font-family:'Sora',sans-serif;">${a.asset_tag}</strong></td>
+            <td>${a.asset_name}</td>
+            <td>${a.employee_name || '<span class="text-muted">—</span>'}</td>
+            <td>${a.dept_name || '<span class="text-muted">—</span>'}</td>
+            <td>${a.allocated_by_name || '—'}</td>
+            <td>${fmtDate(a.allocated_at)}</td>
+            <td>${a.expected_return_date ? fmtDate(a.expected_return_date) : '—'}</td>
+            <td>${statusBadge(a.status)}</td>
+            <td>
+              ${a.status === 'Active' ? `<button class="btn btn-ghost btn-xs" data-role="Admin,AssetManager" onclick="returnAsset(${a.id})">↩ Return</button>` : ''}
+            </td>
+          </tr>`).join('')}
+      </tbody></table></div>`;
+        const user = Auth.getUser();
+        wrap.querySelectorAll('[data-role]').forEach(el => {
+          const roles = el.dataset.role.split(',');
+          if (!roles.includes(user.role)) el.style.display = 'none';
+        });
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function returnAsset(id) {
+      if (!confirm('Mark this allocation as returned?')) return;
+      try {
+        await apiFetch(`/api/allocations/${id}/return`, { method: 'POST' });
+        toast('Asset returned successfully');
+        loadAllocations();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // Open allocate modal
+    document.getElementById('btn-allocate')?.addEventListener('click', async () => {
+      await Promise.all([
+        populateSelect(document.getElementById('alloc-asset'), '/api/assets/?status=Available', 'id', 'name', 'Select Asset'),
+        populateSelect(document.getElementById('alloc-employee'), '/api/org/employees', 'id', 'name', 'Select Employee'),
+        populateSelect(document.getElementById('alloc-dept'), '/api/org/departments', 'id', 'name', 'Select Department'),
+      ]);
+      openModal('modal-allocate');
+    });
+
+    document.getElementById('btn-save-alloc').addEventListener('click', async () => {
+      const body = {
+        asset_id: parseInt(document.getElementById('alloc-asset').value),
+        employee_id: parseInt(document.getElementById('alloc-employee').value) || null,
+        department_id: parseInt(document.getElementById('alloc-dept').value) || null,
+        expected_return_date: document.getElementById('alloc-return-date').value || null,
+        notes: document.getElementById('alloc-notes').value.trim() || null,
+      };
+      if (!body.asset_id) { toast('Please select an asset', 'error'); return; }
+      try {
+        await apiFetch('/api/allocations/', { method: 'POST', body: JSON.stringify(body) });
+        toast('Asset allocated successfully');
+        closeModal('modal-allocate');
+        loadAllocations();
+      } catch (e) { toast(e.message, 'error'); }
+    });
+
+    document.getElementById('search-input').addEventListener('input', () => {
+      clearTimeout(window._st);
+      window._st = setTimeout(loadAllocations, 350);
+    });
+
+    loadAllocations();
+  </script>
+</body>
+
+</html>

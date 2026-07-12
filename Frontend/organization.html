@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Organization Setup — AssetFlow</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="toast-container"></div>
+<div class="app-shell">
+  <div id="sidebar-mount"></div>
+  <div class="main-content">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="hamburger" id="hamburger">☰</button>
+        <span class="topbar-title">🏢 Organization Setup</span>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+
+        <!-- Departments -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🏬 Departments</div>
+            <button class="btn btn-primary btn-sm" id="btn-add-dept">➕ Add</button>
+          </div>
+          <div id="dept-list"><div style="display:flex;justify-content:center;padding:24px;"><div class="spinner"></div></div></div>
+          <!-- Add form -->
+          <div id="dept-form" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+            <div class="form-group">
+              <label class="form-label">Department Name</label>
+              <input type="text" id="dept-name" class="form-control" placeholder="e.g. Engineering">
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <button class="btn btn-primary btn-sm" onclick="saveDept()">Save</button>
+              <button class="btn btn-secondary btn-sm" onclick="toggleForm('dept-form','btn-add-dept')">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Categories -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🏷️ Asset Categories</div>
+            <button class="btn btn-primary btn-sm" id="btn-add-cat">➕ Add</button>
+          </div>
+          <div id="cat-list"><div style="display:flex;justify-content:center;padding:24px;"><div class="spinner"></div></div></div>
+          <div id="cat-form" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+            <div class="form-group">
+              <label class="form-label">Category Name</label>
+              <input type="text" id="cat-name" class="form-control" placeholder="e.g. Laptop">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Description</label>
+              <input type="text" id="cat-desc" class="form-control" placeholder="Optional description">
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <button class="btn btn-primary btn-sm" onclick="saveCat()">Save</button>
+              <button class="btn btn-secondary btn-sm" onclick="toggleForm('cat-form','btn-add-cat')">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Users / Employees -->
+        <div class="card" style="grid-column:1/-1;">
+          <div class="card-header">
+            <div class="card-title">👥 Users &amp; Roles</div>
+          </div>
+          <div id="users-list"><div style="display:flex;justify-content:center;padding:24px;"><div class="spinner"></div></div></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="core.js"></script>
+<script src="sidebar.js"></script>
+<script>
+if (!requireAuth(['Admin'])) { window.location.href = 'dashboard.html'; throw new Error(); }
+injectSidebar(); initSidebar();
+
+function toggleForm(formId, btnId) {
+  const f = document.getElementById(formId);
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+document.getElementById('btn-add-dept').addEventListener('click', () => toggleForm('dept-form', 'btn-add-dept'));
+document.getElementById('btn-add-cat').addEventListener('click', () => toggleForm('cat-form', 'btn-add-cat'));
+
+async function loadDepts() {
+  try {
+    const data = await apiFetch('/api/org/departments');
+    const el = document.getElementById('dept-list');
+    if (!data.length) { el.innerHTML = '<p class="text-muted text-sm" style="padding:8px 0;">No departments yet.</p>'; return; }
+    el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Name</th><th>Employees</th></tr></thead>
+      <tbody>${data.map(d=>`<tr><td>${d.name}</td><td>${d.employee_count ?? '—'}</td></tr>`).join('')}</tbody>
+    </table></div>`;
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function loadCats() {
+  try {
+    const data = await apiFetch('/api/org/categories');
+    const el = document.getElementById('cat-list');
+    if (!data.length) { el.innerHTML = '<p class="text-muted text-sm" style="padding:8px 0;">No categories yet.</p>'; return; }
+    el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Name</th><th>Description</th></tr></thead>
+      <tbody>${data.map(c=>`<tr><td>${c.name}</td><td>${c.description||'—'}</td></tr>`).join('')}</tbody>
+    </table></div>`;
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function loadUsers() {
+  try {
+    const data = await apiFetch('/api/org/employees');
+    const el = document.getElementById('users-list');
+    if (!data.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">👥</div><p>No users yet.</p></div>'; return; }
+    el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th></th></tr></thead>
+      <tbody>${data.map(u=>`
+        <tr>
+          <td>${u.name}</td>
+          <td>${u.email}</td>
+          <td>${roleBadge(u.role)}</td>
+          <td>${u.department_name||'—'}</td>
+          <td>
+            <select class="form-select" style="width:160px;" onchange="changeRole(${u.id},this.value)">
+              <option ${u.role==='Employee'?'selected':''}>Employee</option>
+              <option ${u.role==='AssetManager'?'selected':''}>AssetManager</option>
+              <option ${u.role==='DepartmentHead'?'selected':''}>DepartmentHead</option>
+              <option ${u.role==='Admin'?'selected':''}>Admin</option>
+            </select>
+          </td>
+        </tr>`).join('')}
+      </tbody></table></div>`;
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function saveDept() {
+  const name = document.getElementById('dept-name').value.trim();
+  if (!name) { toast('Department name is required','error'); return; }
+  try {
+    await apiFetch('/api/org/departments', { method:'POST', body:JSON.stringify({name}) });
+    toast('Department created');
+    document.getElementById('dept-name').value = '';
+    toggleForm('dept-form','btn-add-dept');
+    loadDepts();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function saveCat() {
+  const name = document.getElementById('cat-name').value.trim();
+  const description = document.getElementById('cat-desc').value.trim() || null;
+  if (!name) { toast('Category name is required','error'); return; }
+  try {
+    await apiFetch('/api/org/categories', { method:'POST', body:JSON.stringify({name, description}) });
+    toast('Category created');
+    document.getElementById('cat-name').value = '';
+    document.getElementById('cat-desc').value = '';
+    toggleForm('cat-form','btn-add-cat');
+    loadCats();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function changeRole(userId, role) {
+  try {
+    await apiFetch(`/api/org/employees/${userId}/role`, { method:'PATCH', body:JSON.stringify({role}) });
+    toast(`Role updated to ${role}`);
+    loadUsers();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+loadDepts();
+loadCats();
+loadUsers();
+</script>
+</body>
+</html>

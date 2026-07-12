@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notifications — AssetFlow</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="toast-container"></div>
+<div class="app-shell">
+  <div id="sidebar-mount"></div>
+  <div class="main-content">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="hamburger" id="hamburger">☰</button>
+        <span class="topbar-title">🔔 Notifications</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-secondary btn-sm" id="btn-mark-all">✓ Mark All Read</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div id="notif-list">
+          <div style="display:flex;justify-content:center;padding:48px;"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="core.js"></script>
+<script src="sidebar.js"></script>
+<script>
+if (!requireAuth()) throw new Error();
+injectSidebar(); initSidebar();
+
+async function loadNotifs() {
+  const wrap = document.getElementById('notif-list');
+  wrap.innerHTML = '<div style="display:flex;justify-content:center;padding:48px;"><div class="spinner"></div></div>';
+  try {
+    const data = await apiFetch('/api/dashboard/notifications');
+    if (!data.length) {
+      wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">🔔</div><p>You\'re all caught up! No notifications.</p></div>';
+      return;
+    }
+    wrap.innerHTML = data.map(n => `
+      <div class="notif-item" style="display:flex;align-items:flex-start;gap:16px;padding:16px 20px;border-bottom:1px solid var(--border);${n.is_read?'opacity:0.55;':''}" id="notif-${n.id}">
+        <div style="font-size:24px;flex-shrink:0;">${getNotifIcon(n.type)}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:${n.is_read?'400':'600'};margin-bottom:4px;">${n.message || n.title}</div>
+          <div class="text-muted text-sm">${fmtDateTime(n.created_at)}</div>
+        </div>
+        ${!n.is_read ? `<button class="btn btn-ghost btn-xs" onclick="markRead(${n.id})">✓ Mark Read</button>` : '<span class="badge badge-gray" style="flex-shrink:0;">Read</span>'}
+      </div>`).join('');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+function getNotifIcon(type) {
+  const map = {
+    overdue:'⏰', maintenance:'🔧', booking:'📅', allocation:'🔄',
+    audit:'🔍', system:'⚙️', transfer:'↔️'
+  };
+  return map[type] || '🔔';
+}
+
+async function markRead(id) {
+  try {
+    await apiFetch(`/api/dashboard/notifications/${id}/read`, { method: 'POST' });
+    const item = document.getElementById(`notif-${id}`);
+    if (item) { item.style.opacity = '0.55'; item.querySelector('button')?.remove(); }
+    loadNotifCount();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+document.getElementById('btn-mark-all').addEventListener('click', async () => {
+  try {
+    await apiFetch('/api/dashboard/notifications/read-all', { method: 'POST' });
+    toast('All notifications marked as read');
+    loadNotifs();
+    loadNotifCount();
+  } catch(e) { toast(e.message,'error'); }
+});
+
+loadNotifs();
+</script>
+</body>
+</html>

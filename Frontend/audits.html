@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audit Cycles — AssetFlow</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="toast-container"></div>
+<div class="app-shell">
+  <div id="sidebar-mount"></div>
+  <div class="main-content">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="hamburger" id="hamburger">☰</button>
+        <span class="topbar-title">🔍 Audit Cycles</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary btn-sm" id="btn-new-audit" data-role="Admin,AssetManager">➕ Start Audit</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div id="audit-table-wrap">
+          <div style="display:flex;justify-content:center;padding:48px;"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New Audit Modal -->
+<div class="modal-overlay" id="modal-audit">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Start Audit Cycle</div>
+      <button class="modal-close" onclick="closeModal('modal-audit')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group form-full">
+          <label class="form-label">Audit Name *</label>
+          <input type="text" id="audit-name" class="form-control" placeholder="e.g. Q2 2025 IT Audit">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Start Date *</label>
+          <input type="date" id="audit-start" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">End Date *</label>
+          <input type="date" id="audit-end" class="form-control">
+        </div>
+        <div class="form-group form-full">
+          <label class="form-label">Scope / Notes</label>
+          <input type="text" id="audit-scope" class="form-control" placeholder="Departments or asset types in scope">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-audit')">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-audit">Start Audit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Audit Items Modal -->
+<div class="modal-overlay" id="modal-audit-items">
+  <div class="modal" style="max-width:800px;">
+    <div class="modal-header">
+      <div class="modal-title" id="audit-items-title">Audit Items</div>
+      <button class="modal-close" onclick="closeModal('modal-audit-items')">×</button>
+    </div>
+    <div class="modal-body" id="audit-items-body"></div>
+  </div>
+</div>
+
+<script src="core.js"></script>
+<script src="sidebar.js"></script>
+<script>
+if (!requireAuth(['Admin','AssetManager'])) { window.location.href = 'dashboard.html'; throw new Error(); }
+injectSidebar(); initSidebar();
+
+async function loadAudits() {
+  const wrap = document.getElementById('audit-table-wrap');
+  wrap.innerHTML = '<div style="display:flex;justify-content:center;padding:48px;"><div class="spinner"></div></div>';
+  try {
+    const data = await apiFetch('/api/audits/');
+    if (!data.length) {
+      wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><p>No audit cycles started yet.</p></div>';
+      return;
+    }
+    wrap.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr>
+        <th>Name</th><th>Status</th><th>Start Date</th><th>End Date</th>
+        <th>Total Items</th><th>Verified</th><th>Discrepancies</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${data.map(a => `
+          <tr>
+            <td><strong>${a.name}</strong></td>
+            <td>${statusBadge(a.status)}</td>
+            <td>${fmtDate(a.start_date)}</td>
+            <td>${fmtDate(a.end_date)}</td>
+            <td>${a.total_items ?? '—'}</td>
+            <td><span class="badge badge-green">${a.verified_count ?? 0}</span></td>
+            <td>${a.discrepancy_count > 0 ? `<span class="badge badge-red">${a.discrepancy_count}</span>` : '<span class="badge badge-gray">0</span>'}</td>
+            <td style="white-space:nowrap;">
+              <button class="btn btn-ghost btn-xs" onclick="viewItems(${a.id}, '${a.name}')">📋 View</button>
+              ${a.status === 'Open' ? `<button class="btn btn-ghost btn-xs" onclick="closeAudit(${a.id})">🔒 Close</button>` : ''}
+            </td>
+          </tr>`).join('')}
+      </tbody></table></div>`;
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function viewItems(auditId, name) {
+  document.getElementById('audit-items-title').textContent = `Audit Items — ${name}`;
+  const body = document.getElementById('audit-items-body');
+  body.innerHTML = '<div style="display:flex;justify-content:center;padding:24px;"><div class="spinner"></div></div>';
+  openModal('modal-audit-items');
+  try {
+    const data = await apiFetch(`/api/audits/${auditId}/items`);
+    if (!data.length) { body.innerHTML = '<p class="text-muted">No items in this audit.</p>'; return; }
+    body.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Asset Tag</th><th>Name</th><th>Expected</th><th>Actual Status</th><th>Notes</th><th></th></tr></thead>
+      <tbody>${data.map(item => `
+        <tr>
+          <td><strong style="color:var(--teal);">${item.asset_tag}</strong></td>
+          <td>${item.asset_name}</td>
+          <td>${statusBadge(item.expected_status)}</td>
+          <td>${item.actual_status ? statusBadge(item.actual_status) : '<span class="text-muted">Not verified</span>'}</td>
+          <td>${item.notes || '—'}</td>
+          <td>
+            ${!item.actual_status ? `<button class="btn btn-ghost btn-xs" onclick="verifyItem(${item.id})">✔ Verify</button>` : ''}
+          </td>
+        </tr>`).join('')}
+      </tbody></table></div>`;
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function verifyItem(itemId) {
+  try {
+    await apiFetch(`/api/audits/items/${itemId}/verify`, { method:'POST' });
+    toast('Item verified');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function closeAudit(auditId) {
+  if (!confirm('Close this audit cycle?')) return;
+  try {
+    await apiFetch(`/api/audits/${auditId}/close`, { method:'POST' });
+    toast('Audit closed');
+    loadAudits();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+document.getElementById('btn-new-audit')?.addEventListener('click', () => openModal('modal-audit'));
+
+document.getElementById('btn-save-audit').addEventListener('click', async () => {
+  const body = {
+    name: document.getElementById('audit-name').value.trim(),
+    start_date: document.getElementById('audit-start').value,
+    end_date: document.getElementById('audit-end').value,
+    scope: document.getElementById('audit-scope').value.trim() || null,
+  };
+  if (!body.name || !body.start_date || !body.end_date) { toast('Name, start and end date are required','error'); return; }
+  try {
+    await apiFetch('/api/audits/', { method:'POST', body:JSON.stringify(body) });
+    toast('Audit cycle started');
+    closeModal('modal-audit');
+    loadAudits();
+  } catch(e) { toast(e.message,'error'); }
+});
+
+loadAudits();
+</script>
+</body>
+</html>
